@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-08-13T09:19:30.488Z",
+  "results": [
+    {
+      "config": "标准配置",
+      "success": true,
+      "exitCode": 1,
+      "signal": null,
+      "stdoutLength": 216,
+      "stderrLength": 0,
+      "stderr": ""
+    },
+    {
+      "config": "明确版本",
+      "success": true,
+      "exitCode": 1,
+      "signal": null,
+      "stdoutLength": 216,
+      "stderrLength": 161,
+      "stderr": "[2025-08-13 17:19:10] INFO: 启动 MCP HuggingFetch 服务器 v0.5.1\n[2025-08-13 17:19:10] INFO: 启动 MCP HuggingFetch 服务器\n[2025-08-13 17:19:20] INFO: 收到 SIGTERM，正在关闭服务器..."
+    },
+    {
+      "config": "Windows兼容",
+      "success": true,
+      "exitCode": 1,
+      "signal": null,
+      "stdoutLength": 216,
+      "stderrLength": 0,
+      "stderr": ""
+    }
+  ],
+  "environment": {
+    "platform": "darwin",
+    "nodeVersion": "v24.5.0",
+    "npmVersion": "unknown"
+  }
+}
