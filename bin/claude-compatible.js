@@ -20,10 +20,10 @@ async function main() {
   try {
     // 创建并运行 MCP 服务器
     const server = new McpServer();
-    
+
     // 不输出启动信息到 stderr，因为可能干扰 Claude Code
     // console.error('MCP HuggingFetch Server starting...');
-    
+
     await server.run();
   } catch (error) {
     // 只在严重错误时才输出
