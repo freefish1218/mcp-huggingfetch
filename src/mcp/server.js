@@ -34,7 +34,10 @@ class McpServer {
    * 启动服务器，开始监听 stdin 并响应到 stdout
    */
   run() {
-    logger.info('启动 MCP HuggingFetch 服务器');
+    // 只在非生产环境输出启动信息
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info('启动 MCP HuggingFetch 服务器');
+    }
 
     // 创建 readline 接口
     const rl = readline.createInterface({
@@ -73,7 +76,9 @@ class McpServer {
 
     // 优雅关闭
     rl.on('close', () => {
-      logger.info('MCP 服务器关闭');
+      if (process.env.NODE_ENV !== 'production') {
+        logger.info('MCP 服务器关闭');
+      }
     });
 
     // 阻止进程退出

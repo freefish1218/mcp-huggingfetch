@@ -8,12 +8,25 @@
 const { McpServer } = require('../src/mcp/server');
 const { createLogger } = require('../src/utils/logger');
 
+// 为 Claude Code 兼容性设置默认环境变量
+if (!process.env.HUGGINGFACE_TOKEN && !process.env.HF_TOKEN) {
+  process.env.HUGGINGFACE_TOKEN = 'default_token_placeholder';
+}
+
+// 如果是生产环境（由 Claude Code 调用），降低日志级别
+if (!process.env.LOG_LEVEL && process.env.NODE_ENV === 'production') {
+  process.env.LOG_LEVEL = 'warn';
+}
+
 // 初始化日志系统
 const logger = createLogger();
 
 async function main() {
   try {
-    logger.info(`启动 MCP HuggingFetch 服务器 v${require('../package.json').version}`);
+    // 只在非生产环境输出详细启动信息
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`启动 MCP HuggingFetch 服务器 v${require('../package.json').version}`);
+    }
 
     // 创建并运行 MCP 服务器
     const server = new McpServer();
