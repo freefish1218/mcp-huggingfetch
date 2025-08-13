@@ -61,3 +61,4 @@ downloads/
 # Development files
 *.test.js.snap
 .eslintcache
+PUBLISH_GUIDE.md
