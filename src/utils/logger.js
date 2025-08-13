@@ -39,7 +39,7 @@ function createLogger(options = {}) {
     transports: [
       new winston.transports.Console({
         silent,
-        stderrLevels: ['error', 'warn']
+        stderrLevels: ['error', 'warn', 'info', 'debug', 'verbose', 'silly']
       })
     ],
     silent
