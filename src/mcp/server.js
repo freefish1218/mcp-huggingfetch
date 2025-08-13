@@ -261,10 +261,14 @@ class McpServer {
     logger.info(`调用工具: ${name}`);
 
     try {
+      logger.debug('开始执行工具调用...');
       const result = await this.tools.callTool(name, args);
-      return JsonRpcResponse.success(request.id, result);
+      logger.debug('工具调用完成，结果:', JSON.stringify(result, null, 2));
+      const response = JsonRpcResponse.success(request.id, result);
+      logger.debug('生成响应:', JSON.stringify(response, null, 2));
+      return response;
     } catch (error) {
-      logger.error(`工具调用失败: ${error.message}`);
+      logger.error(`工具调用异常: ${error.message}`, error.stack);
       return JsonRpcResponse.error(
         request.id,
         JsonRpcError.internalError(`工具调用失败: ${error.message}`)
