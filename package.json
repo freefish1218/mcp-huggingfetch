@@ -1,0 +1,87 @@
+{
+  "name": "mcp-huggingfetch",
+  "version": "0.1.0",
+  "description": "Pure Node.js MCP server for downloading HuggingFace models with enhanced HTTP API and smart filtering",
+  "author": "MCP HuggingFetch Contributors",
+  "license": "MIT",
+  "homepage": "https://github.com/your-org/mcp-huggingfetch-node",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/mcp-huggingfetch-node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/mcp-huggingfetch-node/issues"
+  },
+  "keywords": [
+    "mcp",
+    "huggingface",
+    "ai",
+    "models",
+    "download",
+    "cli",
+    "server"
+  ],
+  "main": "src/index.js",
+  "bin": {
+    "mcp-huggingfetch": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:basic": "node tests/basic.test.js",
+    "lint": "eslint src/ bin/",
+    "lint:fix": "eslint src/ bin/ --fix",
+    "build": "pkg package.json",
+    "build:all": "pkg package.json --targets node18-linux-x64,node18-macos-x64,node18-win-x64",
+    "prepare": "npm run lint",
+    "prepublishOnly": "npm test && npm run lint"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "fs-extra": "^11.1.1",
+    "winston": "^3.11.0",
+    "joi": "^17.11.0",
+    "progress": "^2.0.3",
+    "mime-types": "^2.1.35"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^8.54.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-n": "^16.3.1",
+    "eslint-plugin-promise": "^6.1.1",
+    "pkg": "^5.8.1"
+  },
+  "files": [
+    "src/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "pkg": {
+    "scripts": "src/**/*.js",
+    "targets": [
+      "node18-linux-x64",
+      "node18-macos-x64", 
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.js",
+      "**/__tests__/**/*.js"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/**/*.test.js"
+    ]
+  }
+}

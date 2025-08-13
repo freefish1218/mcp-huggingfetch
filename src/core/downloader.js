@@ -1,0 +1,615 @@
+/**
+ * HuggingFace 模型下载器
+ * 基于 HTTP API 的原生 Node.js 下载实现
+ */
+
+const axios = require('axios');
+const fs = require('fs-extra');
+const path = require('path');
+const {
+  repoIdToFolderName,
+  extractModelName,
+  formatSize,
+  formatDuration,
+  calculateDirectorySize,
+  getFilesInDirectory,
+  ensureDirectory,
+  createProgressTracker,
+  retry
+} = require('../utils/helpers');
+const { validateFiles, isValidGlobPattern } = require('../utils/validation');
+const { createLogger, safeInfo, safeError, safeDebug } = require('../utils/logger');
+
+const logger = createLogger();
+
+/**
+ * 下载结果类
+ */
+class DownloadResult {
+  constructor() {
+    this.success = false;
+    this.model_name = '';
+    this.download_path = '';
+    this.files_downloaded = [];
+    this.download_size = '';
+    this.duration = '';
+    this.progress_events = [];
+    this.error = null;
+  }
+}
+
+/**
+ * HuggingFace 下载器类
+ */
+class HuggingFaceDownloader {
+  constructor() {
+    this.baseUrl = 'https://huggingface.co';
+    this.apiUrl = 'https://huggingface.co/api';
+  }
+
+  /**
+   * 下载模型的主要方法
+   * @param {Object} options - 下载选项
+   * @param {Object} config - 应用配置
+   * @returns {Promise<DownloadResult>} 下载结果
+   */
+  async downloadModel(options, config) {
+    const startTime = Date.now();
+    const result = new DownloadResult();
+    result.model_name = extractModelName(options.repo_id);
+
+    const progress = createProgressTracker('下载进度');
+
+    try {
+      safeInfo(logger, `开始下载模型: ${options.repo_id}`);
+      progress.update(0, '初始化下载环境...');
+
+      // 设置下载目录
+      const downloadDir = options.download_dir || config.download_dir;
+      const repoFolderName = repoIdToFolderName(options.repo_id);
+      const targetDir = path.join(downloadDir, repoFolderName);
+
+      result.download_path = targetDir;
+
+      // 确保目标目录存在
+      await ensureDirectory(targetDir);
+      progress.update(10, '创建下载目录...');
+
+      // 使用增强的 HTTP API 下载
+      progress.update(20, '开始 HTTP API 下载...');
+      const downloadSuccess = await this.downloadViaHttpApi(options, config, targetDir, progress);
+
+      if (!downloadSuccess) {
+        throw new Error('下载失败，未能获取任何文件');
+      }
+
+      // 验证和收集结果
+      progress.update(90, '验证下载结果...');
+      await this.finalizeDownload(result, targetDir, progress);
+
+      // 计算耗时
+      const duration = Date.now() - startTime;
+      result.duration = formatDuration(duration);
+      result.success = true;
+      result.progress_events = progress.getEvents();
+
+      progress.complete('下载完成');
+      safeInfo(logger, `模型 ${options.repo_id} 下载完成，耗时: ${result.duration}`);
+
+      return result;
+    } catch (error) {
+      safeError(logger, `下载失败: ${error.message}`);
+      result.error = error.message;
+      result.progress_events = progress.getEvents();
+      result.progress_events.push(`下载失败: ${error.message}`);
+      return result;
+    }
+  }
+
+  /**
+   * 使用增强的 HuggingFace HTTP API 下载
+   * @param {Object} options - 下载选项
+   * @param {Object} config - 应用配置
+   * @param {string} targetDir - 目标目录
+   * @param {Object} progress - 进度跟踪器
+   * @returns {Promise<boolean>} 是否成功
+   */
+  async downloadViaHttpApi(options, config, targetDir, progress) {
+    safeDebug(logger, '开始增强的 HTTP API 下载');
+
+    try {
+      // 获取仓库信息（带重试）
+      const repoInfo = await retry(async() => {
+        return await this.getRepositoryInfo(options.repo_id, config.hf_token);
+      }, 3, 2000);
+      progress.update(30, '获取仓库信息...');
+
+      // 获取文件列表（带重试）
+      const files = await retry(async() => {
+        return await this.getFileList(options, repoInfo, config.hf_token);
+      }, 3, 1000);
+      progress.update(40, `发现 ${files.length} 个文件...`);
+
+      if (files.length === 0) {
+        throw new Error('没有找到匹配的文件');
+      }
+
+      // 计算总大小用于进度跟踪
+      const totalSize = files.reduce((sum, file) => sum + (file.size || 0), 0);
+      let downloadedSize = 0;
+      let downloadedCount = 0;
+      const totalFiles = files.length;
+      const errors = [];
+
+      safeInfo(logger, `准备下载 ${totalFiles} 个文件，总大小: ${formatSize(totalSize)}`);
+
+      // 并发下载文件（限制并发数）
+      const concurrency = 3;
+      const fileChunks = this.chunkArray(files, Math.ceil(files.length / concurrency));
+
+      for (const chunk of fileChunks) {
+        const downloadPromises = chunk.map(async(file) => {
+          try {
+            const fileSize = await this.downloadFileWithProgress(
+              options.repo_id,
+              file,
+              targetDir,
+              config.hf_token,
+              options.revision,
+              (size) => {
+                downloadedSize += size;
+                const percentage = 40 + Math.round((downloadedSize / totalSize) * 50);
+                progress.update(percentage, `已下载 ${downloadedCount}/${totalFiles} 个文件 (${formatSize(downloadedSize)}/${formatSize(totalSize)})`);
+              }
+            );
+            downloadedCount++;
+            safeDebug(logger, `文件下载完成: ${file.path} (${formatSize(fileSize)})`);
+            return { file, success: true, size: fileSize };
+          } catch (error) {
+            const errorMsg = `下载文件 ${file.path} 失败: ${error.message}`;
+            safeError(logger, errorMsg);
+            errors.push({ file: file.path, error: errorMsg });
+            return { file, success: false, error: errorMsg };
+          }
+        });
+
+        await Promise.all(downloadPromises);
+      }
+
+      // 报告结果
+      if (downloadedCount === 0) {
+        throw new Error(`所有文件下载失败。错误列表:\n${errors.map(e => `- ${e.error}`).join('\n')}`);
+      }
+
+      if (errors.length > 0) {
+        safeError(logger, `部分文件下载失败 (${errors.length}/${totalFiles}):\n${errors.map(e => `- ${e.error}`).join('\n')}`);
+      }
+
+      safeInfo(logger, `成功下载 ${downloadedCount}/${totalFiles} 个文件`);
+      return downloadedCount > 0;
+    } catch (error) {
+      safeError(logger, `HTTP API 下载失败: ${error.message}`);
+      throw error;
+    }
+  }
+
+
+  /**
+   * 获取仓库信息
+   * @param {string} repoId - 仓库 ID
+   * @param {string} token - HuggingFace Token
+   * @returns {Promise<Object>} 仓库信息
+   */
+  async getRepositoryInfo(repoId, token) {
+    const url = `${this.apiUrl}/models/${repoId}`;
+    const headers = {};
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    try {
+      const response = await axios.get(url, { headers, timeout: 10000 });
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        throw new Error(`仓库 ${repoId} 不存在或无法访问`);
+      } else if (error.response?.status === 401) {
+        throw new Error('HuggingFace Token 无效或权限不足');
+      } else {
+        throw new Error(`获取仓库信息失败: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * 获取文件列表
+   * @param {Object} options - 下载选项
+   * @param {Object} repoInfo - 仓库信息
+   * @param {string} token - HuggingFace Token
+   * @returns {Promise<Array>} 文件列表
+   */
+  async getFileList(options, repoInfo, token) {
+    const revision = options.revision || 'main';
+    const url = `${this.apiUrl}/models/${options.repo_id}/tree/${revision}`;
+    const headers = {};
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    try {
+      const response = await axios.get(url, { headers, timeout: 10000 });
+      let files = response.data.filter(item => item.type === 'file');
+
+      // 应用文件过滤
+      files = this.filterFiles(files, options);
+
+      return files;
+    } catch (error) {
+      throw new Error(`获取文件列表失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 增强的文件过滤功能
+   * @param {Array} files - 文件列表
+   * @param {Object} options - 下载选项
+   * @returns {Array} 过滤后的文件列表
+   */
+  filterFiles(files, options) {
+    let filteredFiles = [...files];
+    const originalCount = files.length;
+
+    safeDebug(logger, `开始过滤 ${originalCount} 个文件`);
+
+    // 如果指定了具体文件列表
+    if (options.files && options.files.length > 0) {
+      const { error, value } = validateFiles(options.files);
+      if (error) {
+        throw error;
+      }
+      const fileSet = new Set(value);
+      filteredFiles = filteredFiles.filter(file => fileSet.has(file.path));
+      safeDebug(logger, `文件名过滤后: ${filteredFiles.length} 个文件`);
+    }
+
+    // 应用包含模式（支持多个模式）
+    if (options.include_pattern) {
+      const patterns = Array.isArray(options.include_pattern)
+        ? options.include_pattern
+        : [options.include_pattern];
+
+      for (const pattern of patterns) {
+        if (!isValidGlobPattern(pattern)) {
+          throw new Error(`无效的包含模式: ${pattern}`);
+        }
+      }
+
+      filteredFiles = filteredFiles.filter(file => {
+        return patterns.some(pattern => this.matchGlob(file.path, pattern));
+      });
+      safeDebug(logger, `包含模式过滤后: ${filteredFiles.length} 个文件`);
+    }
+
+    // 应用排除模式（支持多个模式）
+    if (options.exclude_pattern) {
+      const patterns = Array.isArray(options.exclude_pattern)
+        ? options.exclude_pattern
+        : [options.exclude_pattern];
+
+      for (const pattern of patterns) {
+        if (!isValidGlobPattern(pattern)) {
+          throw new Error(`无效的排除模式: ${pattern}`);
+        }
+      }
+
+      filteredFiles = filteredFiles.filter(file => {
+        return !patterns.some(pattern => this.matchGlob(file.path, pattern));
+      });
+      safeDebug(logger, `排除模式过滤后: ${filteredFiles.length} 个文件`);
+    }
+
+    // 文件大小过滤
+    if (options.max_file_size) {
+      const maxSize = this.parseFileSize(options.max_file_size);
+      filteredFiles = filteredFiles.filter(file => {
+        if (!file.size) return true; // 如果没有大小信息，则保留
+        return file.size <= maxSize;
+      });
+      safeDebug(logger, `文件大小过滤后: ${filteredFiles.length} 个文件`);
+    }
+
+    if (options.min_file_size) {
+      const minSize = this.parseFileSize(options.min_file_size);
+      filteredFiles = filteredFiles.filter(file => {
+        if (!file.size) return true; // 如果没有大小信息，则保留
+        return file.size >= minSize;
+      });
+      safeDebug(logger, `最小文件大小过滤后: ${filteredFiles.length} 个文件`);
+    }
+
+    // 文件类型过滤
+    if (options.file_types) {
+      const types = Array.isArray(options.file_types)
+        ? options.file_types
+        : [options.file_types];
+
+      filteredFiles = filteredFiles.filter(file => {
+        const ext = path.extname(file.path).toLowerCase();
+        return types.some(type => {
+          const typeExt = type.startsWith('.') ? type : `.${type}`;
+          return ext === typeExt.toLowerCase();
+        });
+      });
+      safeDebug(logger, `文件类型过滤后: ${filteredFiles.length} 个文件`);
+    }
+
+    // 排序文件（按大小降序，确保大文件优先下载）
+    if (options.sort_by_size !== false) {
+      filteredFiles.sort((a, b) => (b.size || 0) - (a.size || 0));
+    }
+
+    safeInfo(logger, `文件过滤完成: ${originalCount} -> ${filteredFiles.length} 个文件`);
+
+    if (filteredFiles.length === 0) {
+      throw new Error('过滤后没有文件需要下载，请检查过滤条件');
+    }
+
+    return filteredFiles;
+  }
+
+  /**
+   * 增强的 glob 模式匹配
+   * @param {string} filePath - 文件路径
+   * @param {string} pattern - glob 模式
+   * @returns {boolean} 是否匹配
+   */
+  matchGlob(filePath, pattern) {
+    // 处理特殊模式
+    if (pattern === '*' || pattern === '**') {
+      return true;
+    }
+
+    // 规范化路径分隔符
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    const normalizedPattern = pattern.replace(/\\/g, '/');
+
+    // 转换为正则表达式
+    const regex = this.globToRegex(normalizedPattern);
+    return regex.test(normalizedPath);
+  }
+
+  /**
+   * 将 glob 模式转换为正则表达式（增强版本）
+   * @param {string} glob - glob 模式
+   * @returns {RegExp} 正则表达式
+   */
+  globToRegex(glob) {
+    const regexPattern = glob
+      // 转义特殊字符
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      // 处理 ** (匹配任意路径)
+      .replace(/\\\*\\\*/g, '.*')
+      // 处理 * (匹配任意字符但不包括路径分隔符)
+      .replace(/\\\*/g, '[^/]*')
+      // 处理 ? (匹配单个字符但不包括路径分隔符)
+      .replace(/\\\?/g, '[^/]')
+      // 处理字符类 [abc]
+      .replace(/\\\[([^\]]*)\\\]/g, '[$1]')
+      // 处理否定字符类 [!abc] 或 [^abc]
+      .replace(/\\\[!([^\]]*)\\\]/g, '[^$1]');
+
+    return new RegExp(`^${regexPattern}$`, 'i');
+  }
+
+  /**
+   * 解析文件大小字符串
+   * @param {string} sizeStr - 大小字符串 (如 "10MB", "1.5GB", "500KB")
+   * @returns {number} 字节数
+   */
+  parseFileSize(sizeStr) {
+    if (typeof sizeStr === 'number') {
+      return sizeStr;
+    }
+
+    const str = sizeStr.toString().trim().toLowerCase();
+    const match = str.match(/^(\d+(?:\.\d+)?)\s*([kmgt]?b?)$/);
+
+    if (!match) {
+      throw new Error(`无效的文件大小格式: ${sizeStr}`);
+    }
+
+    const value = parseFloat(match[1]);
+    const unit = match[2] || 'b';
+
+    const multipliers = {
+      b: 1,
+      kb: 1024,
+      mb: 1024 * 1024,
+      gb: 1024 * 1024 * 1024,
+      tb: 1024 * 1024 * 1024 * 1024,
+      k: 1024,
+      m: 1024 * 1024,
+      g: 1024 * 1024 * 1024,
+      t: 1024 * 1024 * 1024 * 1024
+    };
+
+    const multiplier = multipliers[unit];
+    if (multiplier === undefined) {
+      throw new Error(`不支持的文件大小单位: ${match[2]}`);
+    }
+
+    return Math.floor(value * multiplier);
+  }
+
+  /**
+   * 将数组分块
+   * @param {Array} array - 要分块的数组
+   * @param {number} chunkSize - 块大小
+   * @returns {Array[]} 分块后的数组
+   */
+  chunkArray(array, chunkSize) {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+      chunks.push(array.slice(i, i + chunkSize));
+    }
+    return chunks;
+  }
+
+  /**
+   * 下载单个文件（带进度回调和增强错误处理）
+   * @param {string} repoId - 仓库 ID
+   * @param {Object} file - 文件信息
+   * @param {string} targetDir - 目标目录
+   * @param {string} token - HuggingFace Token
+   * @param {string} revision - Git 分支或标签
+   * @param {Function} onProgress - 进度回调函数
+   * @returns {Promise<number>} 下载的文件大小
+   */
+  async downloadFileWithProgress(repoId, file, targetDir, token, revision = 'main', onProgress = null) {
+    const url = `${this.baseUrl}/${repoId}/resolve/${revision}/${file.path}`;
+    const filePath = path.join(targetDir, file.path);
+
+    // 确保文件目录存在
+    await ensureDirectory(path.dirname(filePath));
+
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    // 检查文件是否已存在且大小匹配（简单的断点续传检查）
+    let existingSize = 0;
+    try {
+      const stats = await fs.stat(filePath);
+      existingSize = stats.size;
+      if (file.size && existingSize === file.size) {
+        safeDebug(logger, `文件已存在且大小匹配，跳过下载: ${file.path}`);
+        if (onProgress) onProgress(existingSize);
+        return existingSize;
+      }
+    } catch (error) {
+      // 文件不存在，正常下载
+    }
+
+    // 支持断点续传
+    if (existingSize > 0 && file.size && existingSize < file.size) {
+      headers.Range = `bytes=${existingSize}-`;
+      safeDebug(logger, `断点续传下载: ${file.path} (从 ${existingSize} 字节开始)`);
+    }
+
+    // 使用增强的重试机制下载
+    const fileSize = await retry(async() => {
+      try {
+        const response = await axios({
+          method: 'GET',
+          url,
+          headers,
+          responseType: 'stream',
+          timeout: 60000, // 增加超时时间
+          validateStatus: (status) => {
+            // 接受 200 (完整下载) 和 206 (部分内容/断点续传)
+            return status === 200 || status === 206;
+          }
+        });
+
+        const writeStream = existingSize > 0 && response.status === 206
+          ? fs.createWriteStream(filePath, { flags: 'a' }) // 追加模式用于断点续传
+          : fs.createWriteStream(filePath); // 重新写入
+
+        let downloadedBytes = existingSize;
+
+        // 监听下载进度
+        response.data.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+          if (onProgress) {
+            onProgress(chunk.length);
+          }
+        });
+
+        response.data.pipe(writeStream);
+
+        return new Promise((resolve, reject) => {
+          writeStream.on('finish', () => {
+            resolve(downloadedBytes);
+          });
+
+          writeStream.on('error', (error) => {
+            // 清理部分下载的文件
+            fs.unlink(filePath).catch(() => {});
+            reject(new Error(`文件写入失败: ${error.message}`));
+          });
+
+          response.data.on('error', (error) => {
+            writeStream.destroy();
+            reject(new Error(`网络传输失败: ${error.message}`));
+          });
+
+          // 添加超时处理
+          const timeout = setTimeout(() => {
+            writeStream.destroy();
+            reject(new Error('下载超时'));
+          }, 300000); // 5分钟超时
+
+          writeStream.on('finish', () => {
+            clearTimeout(timeout);
+          });
+        });
+      } catch (error) {
+        if (error.response?.status === 404) {
+          throw new Error(`文件不存在: ${file.path}`);
+        } else if (error.response?.status === 401 || error.response?.status === 403) {
+          throw new Error(`权限不足，无法下载文件: ${file.path}`);
+        } else if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+          throw new Error(`网络连接问题: ${error.message}`);
+        } else {
+          throw new Error(`下载失败: ${error.message}`);
+        }
+      }
+    }, 5, 3000); // 增加重试次数和间隔
+
+    safeDebug(logger, `下载完成: ${file.path} (${formatSize(fileSize)})`);
+    return fileSize;
+  }
+
+  /**
+   * 下载单个文件（兼容旧接口）
+   * @param {string} repoId - 仓库 ID
+   * @param {Object} file - 文件信息
+   * @param {string} targetDir - 目标目录
+   * @param {string} token - HuggingFace Token
+   * @param {string} revision - Git 分支或标签
+   * @returns {Promise<void>}
+   */
+  async downloadFile(repoId, file, targetDir, token, revision = 'main') {
+    await this.downloadFileWithProgress(repoId, file, targetDir, token, revision);
+  }
+
+  /**
+   * 完成下载后的处理
+   * @param {DownloadResult} result - 下载结果
+   * @param {string} targetDir - 目标目录
+   * @param {Object} progress - 进度跟踪器
+   */
+  async finalizeDownload(result, targetDir, progress) {
+    try {
+      // 获取下载的文件列表
+      result.files_downloaded = await getFilesInDirectory(targetDir);
+
+      // 计算下载大小
+      const totalSize = await calculateDirectorySize(targetDir);
+      result.download_size = formatSize(totalSize);
+
+      progress.update(100, '验证完成');
+    } catch (error) {
+      safeError(logger, `完成下载处理时出错: ${error.message}`);
+      // 不抛出错误，因为下载可能已经成功
+    }
+  }
+}
+
+module.exports = {
+  HuggingFaceDownloader,
+  DownloadResult
+};
