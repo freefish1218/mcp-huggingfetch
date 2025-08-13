@@ -39,12 +39,17 @@ const testMessages = [
 console.log('🧪 启动 MCP 协议测试');
 
 async function testMcpServer() {
-  const serverPath = path.join(__dirname, '..', 'src', 'index.js');
+  const serverPath = path.join(__dirname, '..', 'bin', 'cli.js');
   
   console.log('启动 MCP 服务器...');
+  console.log(`服务器路径: ${serverPath}`);
   
   const server = spawn('node', [serverPath], {
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      LOG_LEVEL: 'error' // 减少日志输出，只显示错误
+    }
   });
 
   let responseCount = 0;
@@ -116,9 +121,12 @@ async function testMcpServer() {
   console.log('🏁 测试完成');
 }
 
-// 设置测试环境
-process.env.LOG_LEVEL = 'info';
-process.env.HUGGINGFACE_TOKEN = process.env.HUGGINGFACE_TOKEN || 'test_token';
+// 设置测试环境变量
+// 如果没有设置 HUGGINGFACE_TOKEN，使用测试令牌
+if (!process.env.HUGGINGFACE_TOKEN) {
+  process.env.HUGGINGFACE_TOKEN = 'test_token';
+  console.log('⚠️  使用测试令牌，部分功能可能无法正常工作');
+}
 
 testMcpServer().catch(error => {
   console.error('❌ 测试失败:', error);

@@ -381,26 +381,38 @@ class HuggingFaceDownloader {
   }
 
   /**
-   * 将 glob 模式转换为正则表达式（增强版本）
+   * 将 glob 模式转换为正则表达式（修复版本）
    * @param {string} glob - glob 模式
    * @returns {RegExp} 正则表达式
    */
   globToRegex(glob) {
-    const regexPattern = glob
-      // 转义特殊字符
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      // 处理 ** (匹配任意路径)
-      .replace(/\\\*\\\*/g, '.*')
-      // 处理 * (匹配任意字符但不包括路径分隔符)
-      .replace(/\\\*/g, '[^/]*')
-      // 处理 ? (匹配单个字符但不包括路径分隔符)
-      .replace(/\\\?/g, '[^/]')
-      // 处理字符类 [abc]
-      .replace(/\\\[([^\]]*)\\\]/g, '[$1]')
-      // 处理否定字符类 [!abc] 或 [^abc]
-      .replace(/\\\[!([^\]]*)\\\]/g, '[^$1]');
+    let pattern = glob;
 
-    return new RegExp(`^${regexPattern}$`, 'i');
+    // 使用临时占位符避免转义和替换冲突
+    // 1. 处理 ** (匹配任意路径，包括子目录)
+    pattern = pattern.replace(/\*\*/g, '__DOUBLESTAR__');
+
+    // 2. 处理 * (匹配任意字符但不包括路径分隔符)
+    pattern = pattern.replace(/\*/g, '__STAR__');
+
+    // 3. 处理 ? (匹配单个字符但不包括路径分隔符)
+    pattern = pattern.replace(/\?/g, '__QUESTION__');
+
+    // 4. 处理字符类 [abc] 和 [!abc]
+    pattern = pattern.replace(/\[!([^\]]*)\]/g, '__NEGCLASS__$1__ENDNEGCLASS__');
+    pattern = pattern.replace(/\[([^\]]*)\]/g, '__CLASS__$1__ENDCLASS__');
+
+    // 5. 转义其他正则表达式特殊字符
+    pattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+
+    // 6. 替换回正确的正则表达式模式
+    pattern = pattern.replace(/__DOUBLESTAR__/g, '.*');
+    pattern = pattern.replace(/__STAR__/g, '[^/]*');
+    pattern = pattern.replace(/__QUESTION__/g, '[^/]');
+    pattern = pattern.replace(/__CLASS__([^_]*)__ENDCLASS__/g, '[$1]');
+    pattern = pattern.replace(/__NEGCLASS__([^_]*)__ENDNEGCLASS__/g, '[^$1]');
+
+    return new RegExp(`^${pattern}$`, 'i');
   }
 
   /**
