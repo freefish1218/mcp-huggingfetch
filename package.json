@@ -1,6 +1,6 @@
 {
   "name": "mcp-huggingfetch",
-  "version": "0.5.5",
+  "version": "0.6.1",
   "description": "Pure Node.js MCP server for downloading HuggingFace models with enhanced HTTP API and smart filtering",
   "author": "MCP HuggingFetch Contributors",
   "license": "MIT",
