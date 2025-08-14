@@ -24,8 +24,14 @@ const downloadOptionsSchema = Joi.object({
   download_dir: Joi.string().optional(),
   files: Joi.array().items(Joi.string()).optional(),
   revision: Joi.string().default('main').optional(),
-  include_pattern: Joi.string().optional(),
-  exclude_pattern: Joi.string().optional(),
+  include_pattern: Joi.alternatives().try(
+    Joi.string(),
+    Joi.array().items(Joi.string())
+  ).optional(),
+  exclude_pattern: Joi.alternatives().try(
+    Joi.string(),
+    Joi.array().items(Joi.string())
+  ).optional(),
   force_redownload: Joi.boolean().default(false).optional()
 });
 

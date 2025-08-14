@@ -165,7 +165,7 @@ class HuggingFaceDownloader {
       const formattedFiles = filteredFiles.map(file => {
         const fileExt = path.extname(file.path).toLowerCase();
         let fileType = 'other';
-        
+
         // 识别文件类型
         if (['.safetensors', '.bin', '.pt', '.pth', '.ckpt', '.h5'].includes(fileExt)) {
           fileType = 'model';

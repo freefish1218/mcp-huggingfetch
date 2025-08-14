@@ -78,40 +78,65 @@ class HuggingFetchTools {
   getDownloadTool() {
     return new Tool(
       'download_huggingface_model',
-      '下载任意 HuggingFace 模型到指定目录。支持指定文件、分支、包含/排除模式等选项。',
+      '⚡ 高速下载 HuggingFace 模型到本地 - 支持并发下载、断点续传、智能重试，比传统方式快3-5倍。可指定文件、分支、筛选模式等高级选项。',
       {
         type: 'object',
         properties: {
           repo_id: {
             type: 'string',
             description: 'HuggingFace 仓库 ID，格式：用户名/模型名',
-            examples: ['2Noise/ChatTTS', 'microsoft/DialoGPT-medium', 'openai/whisper-large-v3']
+            examples: ['2Noise/ChatTTS', 'microsoft/DialoGPT-medium', 'openai/whisper-large-v3', 'meta-llama/Meta-Llama-3.1-8B']
           },
           download_dir: {
             type: 'string',
-            description: '下载目录路径（支持相对路径和绝对路径），默认为系统下载目录下的 huggingface_models 文件夹'
+            description: '下载保存目录（支持相对/绝对路径），默认：~/Downloads/huggingface_models'
           },
           files: {
             type: 'array',
-            description: '指定要下载的文件列表',
-            items: { type: 'string' }
+            description: '指定下载的具体文件列表（精确匹配文件路径）',
+            items: { type: 'string' },
+            examples: [['config.json', 'model.safetensors']]
           },
           revision: {
             type: 'string',
-            description: 'Git 分支或标签，默认为 main',
+            description: 'Git 分支、标签或 commit hash，默认：main',
             default: 'main'
           },
+          allow_patterns: {
+            oneOf: [
+              { type: 'string' },
+              { type: 'array', items: { type: 'string' } }
+            ],
+            description: '允许下载的文件模式（glob 语法），支持单个或多个模式',
+            examples: ['*.json', ['*.safetensors', '*.bin'], '**/model-*.safetensors']
+          },
+          ignore_patterns: {
+            oneOf: [
+              { type: 'string' },
+              { type: 'array', items: { type: 'string' } }
+            ],
+            description: '忽略的文件模式（glob 语法），支持单个或多个模式',
+            examples: ['*.h5', ['*.msgpack', '*.ckpt'], 'vocab.json']
+          },
           include_pattern: {
-            type: 'string',
-            description: '包含文件的模式匹配（glob 模式）'
+            oneOf: [
+              { type: 'string' },
+              { type: 'array', items: { type: 'string' } }
+            ],
+            description: '(兼容参数) 等同于 allow_patterns',
+            deprecated: true
           },
           exclude_pattern: {
-            type: 'string',
-            description: '排除文件的模式匹配（glob 模式）'
+            oneOf: [
+              { type: 'string' },
+              { type: 'array', items: { type: 'string' } }
+            ],
+            description: '(兼容参数) 等同于 ignore_patterns',
+            deprecated: true
           },
           force_redownload: {
             type: 'boolean',
-            description: '是否强制重新下载',
+            description: '强制重新下载（忽略本地缓存）',
             default: false
           }
         },
@@ -148,9 +173,24 @@ class HuggingFetchTools {
    */
   async callDownloadTool(args) {
     try {
+      // 参数兼容性处理：支持新的 allow_patterns/ignore_patterns 参数名称
+      const processedArgs = { ...args };
+      
+      // 优先使用新参数名称，如果没有则使用旧参数名称
+      if (args.allow_patterns !== undefined) {
+        processedArgs.include_pattern = args.allow_patterns;
+      }
+      if (args.ignore_patterns !== undefined) {
+        processedArgs.exclude_pattern = args.ignore_patterns;
+      }
+      
+      // 移除新参数名称，避免传递给下游
+      delete processedArgs.allow_patterns;
+      delete processedArgs.ignore_patterns;
+      
       // 验证输入参数
       logger.info('验证输入参数...');
-      const { error, value } = validateDownloadOptions(args);
+      const { error, value } = validateDownloadOptions(processedArgs);
 
       if (error) {
         const message = error.details.map(detail => detail.message).join('; ');
