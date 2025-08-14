@@ -412,10 +412,10 @@ class HuggingFaceDownloader {
     }
 
     // 应用包含模式（支持多个模式）
-    if (options.include_pattern) {
-      const patterns = Array.isArray(options.include_pattern)
-        ? options.include_pattern
-        : [options.include_pattern];
+    if (options.allow_patterns) {
+      const patterns = Array.isArray(options.allow_patterns)
+        ? options.allow_patterns
+        : [options.allow_patterns];
 
       for (const pattern of patterns) {
         if (!isValidGlobPattern(pattern)) {
@@ -430,10 +430,10 @@ class HuggingFaceDownloader {
     }
 
     // 应用排除模式（支持多个模式）
-    if (options.exclude_pattern) {
-      const patterns = Array.isArray(options.exclude_pattern)
-        ? options.exclude_pattern
-        : [options.exclude_pattern];
+    if (options.ignore_patterns) {
+      const patterns = Array.isArray(options.ignore_patterns)
+        ? options.ignore_patterns
+        : [options.ignore_patterns];
 
       for (const pattern of patterns) {
         if (!isValidGlobPattern(pattern)) {

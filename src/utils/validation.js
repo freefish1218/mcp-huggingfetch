@@ -24,11 +24,11 @@ const downloadOptionsSchema = Joi.object({
   download_dir: Joi.string().optional(),
   files: Joi.array().items(Joi.string()).optional(),
   revision: Joi.string().default('main').optional(),
-  include_pattern: Joi.alternatives().try(
+  allow_patterns: Joi.alternatives().try(
     Joi.string(),
     Joi.array().items(Joi.string())
   ).optional(),
-  exclude_pattern: Joi.alternatives().try(
+  ignore_patterns: Joi.alternatives().try(
     Joi.string(),
     Joi.array().items(Joi.string())
   ).optional(),

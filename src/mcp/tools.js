@@ -118,22 +118,6 @@ class HuggingFetchTools {
             description: '忽略的文件模式（glob 语法），支持单个或多个模式',
             examples: ['*.h5', ['*.msgpack', '*.ckpt'], 'vocab.json']
           },
-          include_pattern: {
-            oneOf: [
-              { type: 'string' },
-              { type: 'array', items: { type: 'string' } }
-            ],
-            description: '(兼容参数) 等同于 allow_patterns',
-            deprecated: true
-          },
-          exclude_pattern: {
-            oneOf: [
-              { type: 'string' },
-              { type: 'array', items: { type: 'string' } }
-            ],
-            description: '(兼容参数) 等同于 ignore_patterns',
-            deprecated: true
-          },
           force_redownload: {
             type: 'boolean',
             description: '强制重新下载（忽略本地缓存）',
@@ -173,24 +157,9 @@ class HuggingFetchTools {
    */
   async callDownloadTool(args) {
     try {
-      // 参数兼容性处理：支持新的 allow_patterns/ignore_patterns 参数名称
-      const processedArgs = { ...args };
-
-      // 优先使用新参数名称，如果没有则使用旧参数名称
-      if (args.allow_patterns !== undefined) {
-        processedArgs.include_pattern = args.allow_patterns;
-      }
-      if (args.ignore_patterns !== undefined) {
-        processedArgs.exclude_pattern = args.ignore_patterns;
-      }
-
-      // 移除新参数名称，避免传递给下游
-      delete processedArgs.allow_patterns;
-      delete processedArgs.ignore_patterns;
-
       // 验证输入参数
       logger.info('验证输入参数...');
-      const { error, value } = validateDownloadOptions(processedArgs);
+      const { error, value } = validateDownloadOptions(args);
 
       if (error) {
         const message = error.details.map(detail => detail.message).join('; ');

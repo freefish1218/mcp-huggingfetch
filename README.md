@@ -1,4 +1,4 @@
-# MCP HuggingFace 下载工具
+# MCP HuggingFace 高速下载工具
 
 通过 MCP 协议快速下载 HuggingFace 模型的工具，支持 Claude Desktop、Claude Code、Cursor、VS Code 等客户端。
 
