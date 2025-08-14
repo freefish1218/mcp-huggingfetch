@@ -35,9 +35,9 @@ function createLogger(options = {}) {
 
   // MCP 模式下禁用所有控制台输出
   const isMcpMode = process.env.MCP_MODE === 'true' || process.env.NODE_ENV === 'production';
-  
+
   const transports = [];
-  
+
   if (isMcpMode) {
     // MCP 模式下，将日志写入文件而不是控制台
     const logFile = process.env.MCP_LOG_FILE || '/tmp/mcp-huggingfetch.log';
@@ -57,7 +57,7 @@ function createLogger(options = {}) {
       })
     );
   }
-  
+
   return winston.createLogger({
     level,
     format: format === 'json' ? jsonFormat : customFormat,
