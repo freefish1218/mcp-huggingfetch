@@ -33,16 +33,36 @@ function createLogger(options = {}) {
     winston.format.json()
   );
 
+  // MCP 模式下禁用所有控制台输出
+  const isMcpMode = process.env.MCP_MODE === 'true' || process.env.NODE_ENV === 'production';
+  
+  const transports = [];
+  
+  if (isMcpMode) {
+    // MCP 模式下，将日志写入文件而不是控制台
+    const logFile = process.env.MCP_LOG_FILE || '/tmp/mcp-huggingfetch.log';
+    transports.push(
+      new winston.transports.File({
+        filename: logFile,
+        maxsize: 5242880, // 5MB
+        maxFiles: 1
+      })
+    );
+  } else {
+    // 非 MCP 模式下，只将错误输出到 stderr
+    transports.push(
+      new winston.transports.Console({
+        silent,
+        stderrLevels: ['error', 'warn'] // 只有错误和警告输出到 stderr
+      })
+    );
+  }
+  
   return winston.createLogger({
     level,
     format: format === 'json' ? jsonFormat : customFormat,
-    transports: [
-      new winston.transports.Console({
-        silent,
-        stderrLevels: ['error', 'warn', 'info', 'debug', 'verbose', 'silly']
-      })
-    ],
-    silent
+    transports,
+    silent: isMcpMode ? false : silent // MCP 模式下不静默，但输出到文件
   });
 }
 

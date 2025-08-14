@@ -40,9 +40,9 @@ class McpServer {
     }
 
     // 创建 readline 接口
+    // 注意：不设置 output，避免干扰 stdout 的 MCP 通信
     const rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout,
       crlfDelay: Infinity
     });
 
@@ -57,7 +57,8 @@ class McpServer {
       try {
         const response = await this.handleMessage(line);
         if (response) {
-          console.log(response);
+          // 使用 process.stdout.write 确保纯净的输出
+          process.stdout.write(response + '\n');
         }
       } catch (error) {
         logger.error('处理消息失败:', error);
@@ -65,7 +66,8 @@ class McpServer {
           'unknown',
           JsonRpcError.internalError(error.message)
         );
-        console.log(serializeJsonRpcMessage(errorResponse));
+        // 使用 process.stdout.write 确保纯净的输出
+        process.stdout.write(serializeJsonRpcMessage(errorResponse) + '\n');
       }
     });
 
