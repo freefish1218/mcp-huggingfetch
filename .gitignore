@@ -62,3 +62,6 @@ downloads/
 *.test.js.snap
 .eslintcache
 PUBLISH_GUIDE.md
+
+# Promotion materials
+promotion/
