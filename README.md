@@ -13,7 +13,7 @@
   "mcpServers": {
     "huggingfetch": {
       "command": "npx",
-      "args": ["-y", "mcp-huggingfetch"],
+      "args": ["-y", "mcp-huggingfetch@latest"],
       "env": {
         "HUGGINGFACE_TOKEN": "your_token_here"
       }
@@ -31,7 +31,7 @@
   "mcpServers": {
     "huggingfetch": {
       "command": "npx",
-      "args": ["-y", "mcp-huggingfetch"],
+      "args": ["-y", "mcp-huggingfetch@latest"],
       "env": {
         "HUGGINGFACE_TOKEN": "your_token_here",
         "HUGGINGFETCH_DOWNLOAD_DIR": "./models"
@@ -51,7 +51,7 @@
     {
       "name": "huggingfetch",
       "command": "npx",
-      "args": ["-y", "mcp-huggingfetch"],
+      "args": ["-y", "mcp-huggingfetch@latest"],
       "env": {
         "HUGGINGFACE_TOKEN": "your_token_here"
       }

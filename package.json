@@ -31,6 +31,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:basic": "node tests/basic.test.js",
+    "test:diagnose": "node scripts/diagnose-mcp.js",
+    "setup:claude": "node scripts/setup-claude-code.js",
     "lint": "eslint src/ bin/",
     "lint:fix": "eslint src/ bin/ --fix",
     "build": "pkg package.json",
