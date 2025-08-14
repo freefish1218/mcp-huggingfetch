@@ -211,6 +211,11 @@ class McpServer {
       serverInfo
     );
 
+    // 标记服务器已初始化
+    // 某些客户端可能不发送 initialized 通知，因此在这里也设置
+    this.initialized = true;
+    logger.debug('服务器已初始化');
+
     return JsonRpcResponse.success(request.id, result);
   }
 

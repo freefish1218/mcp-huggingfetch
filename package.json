@@ -1,13 +1,13 @@
 {
   "name": "mcp-huggingfetch",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Pure Node.js MCP server for downloading HuggingFace models with enhanced HTTP API and smart filtering",
   "author": "MCP HuggingFetch Contributors",
   "license": "MIT",
   "homepage": "https://github.com/freefish1218/mcp-huggingfetch",
   "repository": {
     "type": "git",
-    "url": "https://github.com/freefish1218/mcp-huggingfetch.git"
+    "url": "git+https://github.com/freefish1218/mcp-huggingfetch.git"
   },
   "bugs": {
     "url": "https://github.com/freefish1218/mcp-huggingfetch/issues"
@@ -23,7 +23,7 @@
   ],
   "main": "src/index.js",
   "bin": {
-    "mcp-huggingfetch": "./bin/cli.js"
+    "mcp-huggingfetch": "bin/cli.js"
   },
   "scripts": {
     "start": "node src/index.js",
@@ -70,7 +70,7 @@
     "scripts": "src/**/*.js",
     "targets": [
       "node18-linux-x64",
-      "node18-macos-x64", 
+      "node18-macos-x64",
       "node18-win-x64"
     ],
     "outputPath": "dist"
