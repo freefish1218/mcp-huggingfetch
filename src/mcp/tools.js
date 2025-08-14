@@ -175,7 +175,7 @@ class HuggingFetchTools {
     try {
       // 参数兼容性处理：支持新的 allow_patterns/ignore_patterns 参数名称
       const processedArgs = { ...args };
-      
+
       // 优先使用新参数名称，如果没有则使用旧参数名称
       if (args.allow_patterns !== undefined) {
         processedArgs.include_pattern = args.allow_patterns;
@@ -183,11 +183,11 @@ class HuggingFetchTools {
       if (args.ignore_patterns !== undefined) {
         processedArgs.exclude_pattern = args.ignore_patterns;
       }
-      
+
       // 移除新参数名称，避免传递给下游
       delete processedArgs.allow_patterns;
       delete processedArgs.ignore_patterns;
-      
+
       // 验证输入参数
       logger.info('验证输入参数...');
       const { error, value } = validateDownloadOptions(processedArgs);
