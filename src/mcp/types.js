@@ -175,8 +175,9 @@ class ClientInfo {
 class ServerCapabilities {
   constructor() {
     this.tools = null;
-    this.resources = null;
-    this.prompts = null;
+    // 默认为空对象，避免 Claude Code 客户端报错
+    this.resources = {};
+    this.prompts = {};
   }
 
   setToolsCapability(listChanged = false) {
