@@ -198,7 +198,7 @@ class McpServer {
     logger.debug('处理初始化请求');
 
     const capabilities = new ServerCapabilities()
-      .setToolsCapability(false);
+      .setToolsCapability(true);
 
     const serverInfo = new ServerInfo(
       'mcp-huggingfetch',
