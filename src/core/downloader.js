@@ -107,6 +107,143 @@ class HuggingFaceDownloader {
   }
 
   /**
+   * 列出仓库中的文件
+   * @param {Object} options - 列表选项
+   * @param {Object} config - 应用配置
+   * @returns {Promise<Object>} 文件列表结果
+   */
+  async listFiles(options, config) {
+    const result = {
+      success: false,
+      repo_id: options.repo_id,
+      revision: options.revision || 'main',
+      total_files: 0,
+      total_size: 0,
+      files: [],
+      error: null
+    };
+
+    try {
+      safeInfo(logger, `获取仓库文件列表: ${options.repo_id}`);
+
+      // 获取仓库信息
+      const repoInfo = await retry(async() => {
+        return await this.getRepositoryInfo(options.repo_id, config.hf_token);
+      }, 3, 2000);
+
+      // 添加仓库基本信息
+      result.repo_name = repoInfo.modelId || repoInfo.id;
+      result.author = repoInfo.author || options.repo_id.split('/')[0];
+      result.last_modified = repoInfo.lastModified;
+      result.likes = repoInfo.likes;
+      result.downloads = repoInfo.downloads;
+
+      // 获取文件列表
+      const files = await retry(async() => {
+        return await this.getFileList(options, repoInfo, config.hf_token);
+      }, 3, 1000);
+
+      // 如果指定了 pattern 参数，应用过滤
+      let filteredFiles = files;
+      if (options.pattern) {
+        const patterns = Array.isArray(options.pattern) ? options.pattern : [options.pattern];
+        filteredFiles = files.filter(file => {
+          return patterns.some(pattern => this.matchGlob(file.path, pattern));
+        });
+      }
+
+      // 如果指定了 path 参数，只显示该路径下的文件
+      if (options.path) {
+        const pathPrefix = options.path.endsWith('/') ? options.path : options.path + '/';
+        filteredFiles = filteredFiles.filter(file => file.path.startsWith(pathPrefix));
+      }
+
+      // 计算统计信息
+      const totalSize = filteredFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+
+      // 格式化文件信息
+      const formattedFiles = filteredFiles.map(file => {
+        const fileExt = path.extname(file.path).toLowerCase();
+        let fileType = 'other';
+        
+        // 识别文件类型
+        if (['.safetensors', '.bin', '.pt', '.pth', '.ckpt', '.h5'].includes(fileExt)) {
+          fileType = 'model';
+        } else if (['.json', '.txt', '.md', '.yaml', '.yml'].includes(fileExt)) {
+          fileType = 'config';
+        } else if (['.py', '.js', '.sh'].includes(fileExt)) {
+          fileType = 'code';
+        } else if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(fileExt)) {
+          fileType = 'image';
+        }
+
+        return {
+          path: file.path,
+          size: formatSize(file.size || 0),
+          size_bytes: file.size || 0,
+          type: fileType,
+          last_modified: file.lastModified || file.lastCommit?.date,
+          download_url: `${this.baseUrl}/${options.repo_id}/resolve/${options.revision || 'main'}/${file.path}`
+        };
+      });
+
+      // 排序处理
+      if (options.sort_by) {
+        switch (options.sort_by) {
+        case 'size':
+          formattedFiles.sort((a, b) => b.size_bytes - a.size_bytes);
+          break;
+        case 'name':
+          formattedFiles.sort((a, b) => a.path.localeCompare(b.path));
+          break;
+        case 'type':
+          formattedFiles.sort((a, b) => {
+            if (a.type === b.type) {
+              return a.path.localeCompare(b.path);
+            }
+            return a.type.localeCompare(b.type);
+          });
+          break;
+        default:
+          // 默认按名称排序
+          formattedFiles.sort((a, b) => a.path.localeCompare(b.path));
+        }
+      }
+
+      // 组装结果
+      result.success = true;
+      result.total_files = formattedFiles.length;
+      result.total_size = formatSize(totalSize);
+      result.total_size_bytes = totalSize;
+      result.files = formattedFiles;
+
+      // 添加统计信息
+      const typeStats = {};
+      formattedFiles.forEach(file => {
+        if (!typeStats[file.type]) {
+          typeStats[file.type] = { count: 0, size_bytes: 0 };
+        }
+        typeStats[file.type].count++;
+        typeStats[file.type].size_bytes += file.size_bytes;
+      });
+
+      // 格式化统计信息
+      result.statistics = Object.entries(typeStats).map(([type, stats]) => ({
+        type,
+        count: stats.count,
+        size: formatSize(stats.size_bytes)
+      }));
+
+      safeInfo(logger, `文件列表获取成功: 共 ${result.total_files} 个文件，总大小 ${result.total_size}`);
+      return result;
+    } catch (error) {
+      safeError(logger, `获取文件列表失败: ${error.message}`);
+      result.error = error.message;
+      return result;
+    }
+  }
+
+  /**
    * 使用增强的 HuggingFace HTTP API 下载
    * @param {Object} options - 下载选项
    * @param {Object} config - 应用配置

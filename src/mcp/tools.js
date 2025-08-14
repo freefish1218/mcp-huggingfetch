@@ -25,8 +25,50 @@ class HuggingFetchTools {
    */
   getTools() {
     return [
-      this.getDownloadTool()
+      this.getDownloadTool(),
+      this.getListTool()
     ];
+  }
+
+  /**
+   * 获取列表文件工具定义
+   * @returns {Tool} 列表工具定义
+   */
+  getListTool() {
+    return new Tool(
+      'list_huggingface_files',
+      '列出 HuggingFace 仓库中的所有文件，包括文件路径、大小、类型等详细信息',
+      {
+        type: 'object',
+        properties: {
+          repo_id: {
+            type: 'string',
+            description: 'HuggingFace 仓库 ID，格式：用户名/模型名',
+            examples: ['2Noise/ChatTTS', 'microsoft/DialoGPT-medium', 'openai/whisper-large-v3']
+          },
+          revision: {
+            type: 'string',
+            description: 'Git 分支或标签，默认为 main',
+            default: 'main'
+          },
+          path: {
+            type: 'string',
+            description: '仓库内的子路径（可选，用于浏览特定目录）'
+          },
+          pattern: {
+            type: 'string',
+            description: '文件名过滤模式（glob 模式），例如: *.safetensors, *.json'
+          },
+          sort_by: {
+            type: 'string',
+            description: '排序方式: size（按大小）, name（按名称）, type（按类型）',
+            enum: ['size', 'name', 'type'],
+            default: 'name'
+          }
+        },
+        required: ['repo_id']
+      }
+    );
   }
 
   /**
@@ -90,6 +132,8 @@ class HuggingFetchTools {
     switch (name) {
     case 'download_huggingface_model':
       return await this.callDownloadTool(args);
+    case 'list_huggingface_files':
+      return await this.callListTool(args);
     default:
       return CallToolResult.error(
         ToolContent.text(`未知工具: ${name}`)
@@ -160,6 +204,57 @@ class HuggingFetchTools {
       logger.error('工具调用失败:', error);
       return CallToolResult.error(
         ToolContent.text(`工具调用失败: ${error.message}`)
+      );
+    }
+  }
+
+  /**
+   * 调用列表文件工具
+   * @param {Object} args - 工具参数
+   * @returns {Promise<CallToolResult>} 调用结果
+   */
+  async callListTool(args) {
+    try {
+      // 基础参数验证
+      if (!args.repo_id) {
+        return CallToolResult.error(
+          ToolContent.text('缺少必需参数: repo_id')
+        );
+      }
+
+      logger.info('获取文件列表，参数:', JSON.stringify(args, null, 2));
+
+      // 获取配置
+      const config = getConfig();
+
+      // 验证配置
+      try {
+        await config.validate();
+      } catch (configError) {
+        logger.error(`配置验证失败: ${configError.message}`);
+        return CallToolResult.error(
+          ToolContent.text(`配置验证失败: ${configError.message}`)
+        );
+      }
+
+      // 调用下载器的列表方法
+      const result = await this.downloader.listFiles(args, config);
+
+      if (result.success) {
+        logger.info('文件列表获取成功');
+        return CallToolResult.success(
+          ToolContent.text(JSON.stringify(result, null, 2))
+        );
+      } else {
+        logger.error('获取文件列表失败:', result.error);
+        return CallToolResult.error(
+          ToolContent.text(`获取文件列表失败: ${result.error}`)
+        );
+      }
+    } catch (error) {
+      logger.error('列表工具调用失败:', error);
+      return CallToolResult.error(
+        ToolContent.text(`列表工具调用失败: ${error.message}`)
       );
     }
   }
