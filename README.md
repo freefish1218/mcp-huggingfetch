@@ -1,12 +1,14 @@
-# MCP HuggingFace 高速下载工具
+# MCP HuggingFace Fast Download Tool
 
-⚡ 高速下载 HuggingFace 模型到本地 - 支持并发下载、断点续传、智能重试，比传统方式快3-5倍。支持 Claude Desktop、Claude Code、Cursor、VS Code 等客户端。
+⚡ High-speed HuggingFace model downloads with concurrent downloading, resume support, and intelligent retry - 3-5x faster than traditional methods. Supports Claude Desktop, Claude Code, Cursor, VS Code, and other clients.
 
-## 📋 快速配置
+[中文版](README_zh.md) | [日本語](README_ja.md) | [Français](README_fr.md) | [Deutsch](README_de.md)
+
+## 📋 Quick Setup
 
 ### Claude Desktop
 
-在 `claude_desktop_config.json` 中添加：
+Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -24,7 +26,7 @@
 
 ### Claude Code
 
-在 `.claude/claude_config.json` 中添加：
+Add to `.claude/claude_config.json`:
 
 ```json
 {
@@ -40,9 +42,9 @@
 }
 ```
 
-### Cursor / VS Code (Continue 插件)
+### Cursor / VS Code (Continue Extension)
 
-在 `config.json` 中添加：
+Add to `config.json`:
 
 ```json
 {
@@ -59,98 +61,138 @@
 }
 ```
 
-## 🔑 获取 HuggingFace Token
+## 🔑 Get HuggingFace Token
 
-1. 访问 [HuggingFace Settings](https://huggingface.co/settings/tokens)
-2. 创建新的 Access Token
-3. 将 token 复制到上述配置中的 `HUGGINGFACE_TOKEN`
+1. Visit [HuggingFace Settings](https://huggingface.co/settings/tokens)
+2. Create a new Access Token
+3. Copy the token to `HUGGINGFACE_TOKEN` in the above configuration
 
-## 🛠 使用方法
+## 🛠 Usage
 
-配置完成后，直接在对话中使用以下功能：
+After configuration, use the following features directly in conversations:
 
-### 📋 查看文件列表
+### 📋 List Files
 
-在下载前先查看仓库中的文件：
-
-```
-列出 2Noise/ChatTTS 仓库的所有文件
-```
+View repository files before downloading:
 
 ```
-查看 bert-base-uncased 仓库中的 JSON 文件
+List all files in the 2Noise/ChatTTS repository
 ```
 
 ```
-显示 openai/whisper-large-v3 按大小排序的文件列表
+Show JSON files in the bert-base-uncased repository
 ```
 
-### 📥 下载模型
+```
+Display files in openai/whisper-large-v3 sorted by size
+```
 
-选择性下载所需文件：
+### 📥 Download Models
+
+Selectively download required files:
 
 ```
-请帮我下载 ChatTTS 模型到 ./models 目录
+Please download the ChatTTS model to ./models directory
 ```
 
 ```  
-下载 microsoft/DialoGPT-medium 模型，只要 .bin 文件
+Download microsoft/DialoGPT-medium model, only .bin files
 ```
 
 ```
-下载 openai/whisper-large-v3 模型，排除测试文件
+Download openai/whisper-large-v3 model, exclude test files
 ```
 
-## 📝 支持的功能
+## 📝 Supported Features
 
-### 列表工具选项 (`list_huggingface_files`)
+### List Tool Options (`list_huggingface_files`)
 
-| 参数 | 类型 | 说明 | 示例 |
-|------|------|------|------|
-| `repo_id` | string | HuggingFace 仓库 ID | `"2Noise/ChatTTS"` |
-| `revision` | string | Git 分支/标签 | `"main"`, `"v1.0"` |
-| `path` | string | 仓库内子路径 | `"models/"` |
-| `pattern` | string | 文件名过滤模式 | `"*.json"`, `"*.safetensors"` |
-| `sort_by` | string | 排序方式 | `"size"`, `"name"`, `"type"` |
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `repo_id` | string | HuggingFace repository ID | `"2Noise/ChatTTS"` |
+| `revision` | string | Git branch/tag | `"main"`, `"v1.0"` |
+| `path` | string | Repository sub-path | `"models/"` |
+| `pattern` | string | File name filter pattern | `"*.json"`, `"*.safetensors"` |
+| `sort_by` | string | Sort method | `"size"`, `"name"`, `"type"` |
 
-### 下载工具选项 (`download_huggingface_model`)
+### Download Tool Options (`download_huggingface_model`)
 
-| 参数 | 类型 | 说明 | 示例 |
-|------|------|------|------|
-| `repo_id` | string | HuggingFace 仓库 ID | `"2Noise/ChatTTS"` |
-| `download_dir` | string | 下载目录 | `"./models"` |
-| `files` | array | 指定文件列表 | `["model.bin", "config.json"]` |
-| `file_types` | array | 文件类型过滤 | `[".pt", ".bin", ".safetensors"]` |
-| `include_pattern` | string/array | 包含模式 | `"*.json"` 或 `["*.pt", "*.bin"]` |
-| `exclude_pattern` | string/array | 排除模式 | `"test_*"` 或 `["*.onnx", "test_*"]` |
-| `max_file_size` | string | 最大文件大小 | `"500MB"`, `"1GB"` |
-| `min_file_size` | string | 最小文件大小 | `"1KB"`, `"10MB"` |
-| `revision` | string | Git 分支/标签 | `"main"`, `"v1.0"` |
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `repo_id` | string | HuggingFace repository ID | `"2Noise/ChatTTS"` |
+| `download_dir` | string | Download directory | `"./models"` |
+| `files` | array | Specific file list | `["model.bin", "config.json"]` |
+| `allow_patterns` | string/array | Include patterns | `"*.json"` or `["*.pt", "*.bin"]` |
+| `ignore_patterns` | string/array | Exclude patterns | `"test_*"` or `["*.onnx", "test_*"]` |
+| `revision` | string | Git branch/tag | `"main"`, `"v1.0"` |
+| `force_redownload` | boolean | Force re-download | `true`, `false` |
 
-## 🔧 环境变量配置
+## 🔧 Environment Variables
 
-| 变量 | 必需 | 默认值 | 说明 |
-|------|------|--------|------|
-| `HUGGINGFACE_TOKEN` | ✅ | - | HuggingFace 访问令牌 |
-| `HUGGINGFETCH_DOWNLOAD_DIR` | ❌ | `~/Downloads/huggingface_models` | 默认下载目录 |
-| `HF_HOME` | ❌ | `~/.cache/huggingface` | 缓存目录 |
-| `LOG_LEVEL` | ❌ | `info` | 日志级别 (`debug`, `info`, `warn`, `error`) |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `HUGGINGFACE_TOKEN` | ✅ | - | HuggingFace access token |
+| `HUGGINGFETCH_DOWNLOAD_DIR` | ❌ | `~/Downloads/huggingface_models` | Default download directory |
+| `HF_HOME` | ❌ | `~/.cache/huggingface` | Cache directory |
+| `LOG_LEVEL` | ❌ | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 
-## ❓ 常见问题
+## ❓ FAQ
 
-**Q: Token 认证失败怎么办？**  
-A: 检查 `HUGGINGFACE_TOKEN` 是否正确设置，确保 token 有效且有足够权限。
+**Q: Token authentication failed, what should I do?**  
+A: Check if `HUGGINGFACE_TOKEN` is correctly set, ensure the token is valid and has sufficient permissions.
 
-**Q: 下载速度慢怎么办？**  
-A: 工具支持断点续传和并发下载，网络问题可能导致速度慢，会自动重试。
+**Q: Download speed is slow, what can I do?**  
+A: The tool supports resume downloads and concurrent downloading. Network issues may cause slow speeds, automatic retry will occur.
 
-**Q: 如何下载私有模型？**  
-A: 确保您的 HuggingFace 账户有访问权限，并使用有效的 token。
+**Q: How to download private models?**  
+A: Ensure your HuggingFace account has access permissions and use a valid token.
 
-**Q: 支持哪些文件格式？**  
-A: 支持所有 HuggingFace 上的文件格式，包括 `.pt`, `.bin`, `.safetensors`, `.json`, `.txt` 等。
+**Q: What file formats are supported?**  
+A: All file formats on HuggingFace are supported, including `.pt`, `.bin`, `.safetensors`, `.json`, `.txt`, etc.
 
-## 📖 项目地址
+## 🏗 Development
+
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+
+### Installation
+
+```bash
+git clone https://github.com/freefish1218/mcp-huggingfetch.git
+cd mcp-huggingfetch
+npm install
+```
+
+### Development Commands
+
+```bash
+npm run dev          # Run with file watching
+npm start           # Run the MCP server
+npm run test:basic  # Run basic functionality tests
+npm test            # Run Jest unit tests
+npm run lint        # Check code style
+npm run lint:fix    # Auto-fix linting issues
+```
+
+### Building
+
+```bash
+npm run build       # Build single binary
+npm run build:all   # Build for all platforms (Linux, macOS, Windows)
+```
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 📖 Links
 
 - GitHub: [freefish1218/mcp-huggingfetch](https://github.com/freefish1218/mcp-huggingfetch)
-- 问题反馈: [Issues](https://github.com/freefish1218/mcp-huggingfetch/issues)
+- Issues: [Report Issues](https://github.com/freefish1218/mcp-huggingfetch/issues)
+- NPM: [mcp-huggingfetch](https://www.npmjs.com/package/mcp-huggingfetch)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
