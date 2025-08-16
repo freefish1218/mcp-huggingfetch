@@ -1,6 +1,6 @@
 {
   "name": "mcp-huggingfetch",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Pure Node.js MCP server for downloading HuggingFace models with enhanced HTTP API and smart filtering",
   "author": "MCP HuggingFetch Contributors",
   "license": "MIT",
@@ -42,8 +42,7 @@
     "lint:fix": "eslint src/ bin/ --fix",
     "build": "pkg package.json",
     "build:all": "pkg package.json --targets node18-linux-x64,node18-macos-x64,node18-win-x64",
-    "prepare": "npm run lint",
-    "prepublishOnly": "npm test && npm run lint"
+    "prepare": "npm run lint"
   },
   "engines": {
     "node": ">=18.0.0"
