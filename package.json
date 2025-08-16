@@ -28,6 +28,11 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "release": "./scripts/release.sh",
+    "release:patch": "./scripts/release.sh patch",
+    "release:minor": "./scripts/release.sh minor",
+    "release:major": "./scripts/release.sh major",
+    "prepublishOnly": "npm test && npm run lint",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:basic": "node tests/basic.test.js",

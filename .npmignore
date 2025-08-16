@@ -1,0 +1,43 @@
+# 开发和测试文件
+tests/
+scripts/test-*.js
+scripts/diagnose-*.js
+scripts/release.sh
+.github/
+docs/
+
+# 配置文件
+.env
+.env.*
+.gitignore
+.eslintrc.js
+jest.config.js
+
+# 构建输出
+build/
+dist/
+*.log
+
+# 编辑器和系统文件
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# 多语言 README（保留英文版）
+README_*.md
+
+# 示例和临时文件
+examples/
+tmp/
+temp/
+
+# 文档源文件
+*.todo
+*.bak
+
+# NPM 调试日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,13 +1,15 @@
 # MCP HuggingFace Fast Download Tool
 
+[![npm version](https://badge.fury.io/js/mcp-huggingfetch.svg)](https://www.npmjs.com/package/mcp-huggingfetch)
+[![Tests](https://github.com/freefish1218/mcp-huggingfetch/actions/workflows/test.yml/badge.svg)](https://github.com/freefish1218/mcp-huggingfetch/actions/workflows/test.yml)
+[![npm downloads](https://img.shields.io/npm/dm/mcp-huggingfetch.svg)](https://www.npmjs.com/package/mcp-huggingfetch)
+
 ⚡ High-speed HuggingFace model downloads with concurrent downloading, resume support, and intelligent retry - 3-5x faster than traditional methods. Supports Claude Desktop, Claude Code, Cursor, VS Code, and other clients.
 
 <a href="https://glama.ai/mcp/servers/@freefish1218/mcp-huggingfetch">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@freefish1218/mcp-huggingfetch/badge" alt="HuggingFetch MCP server" />
 </a>
 
-## 📋 快速配置
-=======
 [中文版](README_zh.md) | [日本語](README_ja.md) | [Français](README_fr.md) | [Deutsch](README_de.md)
 
 ## 📋 Quick Setup
@@ -181,6 +183,23 @@ npm test            # Run Jest unit tests
 npm run lint        # Check code style
 npm run lint:fix    # Auto-fix linting issues
 ```
+
+### Release Commands
+
+```bash
+npm run release:patch  # Release patch version (1.0.0 -> 1.0.1)
+npm run release:minor  # Release minor version (1.0.0 -> 1.1.0)
+npm run release:major  # Release major version (1.0.0 -> 2.0.0)
+```
+
+The release scripts will automatically:
+- Run tests and linting
+- Update version number
+- Create git tag
+- Push to GitHub
+- Publish to npm
+
+For more details, see [Release Guide](docs/RELEASE.md)
 
 ### Building
 
