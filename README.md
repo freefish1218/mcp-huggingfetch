@@ -2,6 +2,12 @@
 
 ⚡ High-speed HuggingFace model downloads with concurrent downloading, resume support, and intelligent retry - 3-5x faster than traditional methods. Supports Claude Desktop, Claude Code, Cursor, VS Code, and other clients.
 
+<a href="https://glama.ai/mcp/servers/@freefish1218/mcp-huggingfetch">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@freefish1218/mcp-huggingfetch/badge" alt="HuggingFetch MCP server" />
+</a>
+
+## 📋 快速配置
+=======
 [中文版](README_zh.md) | [日本語](README_ja.md) | [Français](README_fr.md) | [Deutsch](README_de.md)
 
 ## 📋 Quick Setup
