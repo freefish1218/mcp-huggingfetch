@@ -31,14 +31,51 @@ if (!process.env.MCP_LOG_FILE) {
 // 初始化日志系统
 const logger = createLogger();
 
+// 保存服务器实例，用于优雅关闭
+let serverInstance = null;
+let isShuttingDown = false;
+
+// 优雅关闭函数
+async function gracefulShutdown(exitCode = 0) {
+  if (isShuttingDown) {
+    return; // 防止重复关闭
+  }
+
+  isShuttingDown = true;
+  logger.info('开始优雅关闭...');
+
+  try {
+    // 给正在进行的操作一些时间来完成
+    if (serverInstance) {
+      // 设置最长等待时间为10秒
+      const shutdownTimeout = setTimeout(() => {
+        logger.warn('优雅关闭超时，强制退出');
+        process.exit(exitCode);
+      }, 10000);
+
+      // 尝试关闭服务器
+      if (serverInstance.shutdown) {
+        await serverInstance.shutdown();
+      }
+
+      clearTimeout(shutdownTimeout);
+    }
+  } catch (error) {
+    logger.error('优雅关闭时出错:', error);
+  }
+
+  logger.info('优雅关闭完成');
+  process.exit(exitCode);
+}
+
 async function main() {
   try {
     // 在 MCP 模式下不输出任何启动信息到控制台
     logger.info(`启动 MCP HuggingFetch 服务器 v${require('../package.json').version}`);
 
     // 创建并运行 MCP 服务器
-    const server = new McpServer();
-    await server.run();
+    serverInstance = new McpServer();
+    await serverInstance.run();
   } catch (error) {
     // 在 MCP 模式下，只在出错时输出到 stderr
     if (process.env.MCP_MODE === 'true') {
@@ -51,32 +88,36 @@ async function main() {
 
 // 处理未捕获的异常
 process.on('uncaughtException', (error) => {
-  // 在 MCP 模式下，输出错误到 stderr 并退出
+  // 在 MCP 模式下，输出错误到 stderr
   if (process.env.MCP_MODE === 'true') {
     process.stderr.write(`Fatal error: ${error.message}\n`);
   }
   logger.error('未捕获的异常:', error);
-  process.exit(1);
+
+  // 优雅关闭
+  gracefulShutdown(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  // 在 MCP 模式下，输出错误到 stderr 并退出
+  // 在 MCP 模式下，输出错误到 stderr
   if (process.env.MCP_MODE === 'true') {
     process.stderr.write(`Fatal error: ${reason}\n`);
   }
   logger.error('未处理的 Promise 拒绝:', reason);
-  process.exit(1);
+
+  // 优雅关闭
+  gracefulShutdown(1);
 });
 
 // 优雅关闭
 process.on('SIGINT', () => {
   logger.info('收到 SIGINT，正在关闭服务器...');
-  process.exit(0);
+  gracefulShutdown(0);
 });
 
 process.on('SIGTERM', () => {
   logger.info('收到 SIGTERM，正在关闭服务器...');
-  process.exit(0);
+  gracefulShutdown(0);
 });
 
 main().catch(error => {

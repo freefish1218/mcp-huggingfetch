@@ -4,6 +4,8 @@
  */
 
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const fs = require('fs-extra');
 const path = require('path');
 const {
@@ -21,6 +23,29 @@ const { validateFiles, isValidGlobPattern } = require('../utils/validation');
 const { createLogger, safeInfo, safeError, safeDebug } = require('../utils/logger');
 
 const logger = createLogger();
+
+// 配置 HTTP Keep-Alive 连接池以提升性能
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 1000,
+  maxSockets: 10, // 每个主机的最大连接数
+  maxFreeSockets: 10 // 保持打开的最大空闲连接数
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 1000,
+  maxSockets: 10, // 每个主机的最大连接数
+  maxFreeSockets: 10 // 保持打开的最大空闲连接数
+});
+
+// 创建专用的 axios 实例，避免污染全局配置
+const axiosInstance = axios.create({
+  httpAgent,
+  httpsAgent,
+  // 添加通用超时配置（后续可被覆盖）
+  timeout: 60000
+});
 
 /**
  * 下载结果类
@@ -346,7 +371,7 @@ class HuggingFaceDownloader {
     }
 
     try {
-      const response = await axios.get(url, { headers, timeout: 10000 });
+      const response = await axiosInstance.get(url, { headers, timeout: 10000 });
       return response.data;
     } catch (error) {
       if (error.response?.status === 404) {
@@ -376,7 +401,7 @@ class HuggingFaceDownloader {
     }
 
     try {
-      const response = await axios.get(url, { headers, timeout: 10000 });
+      const response = await axiosInstance.get(url, { headers, timeout: 10000 });
       let files = response.data.filter(item => item.type === 'file');
 
       // 应用文件过滤
@@ -607,6 +632,45 @@ class HuggingFaceDownloader {
   }
 
   /**
+   * 计算基于文件大小的超时时间
+   * @param {number} fileSize - 文件大小（字节）
+   * @returns {Object} 超时配置 { requestTimeout, downloadTimeout }
+   */
+  calculateTimeouts(fileSize) {
+    // 基础超时时间（毫秒）
+    const BASE_REQUEST_TIMEOUT = 30000; // 30秒基础请求超时
+    const BASE_DOWNLOAD_TIMEOUT = 120000; // 2分钟基础下载超时
+
+    // 假设最低下载速度为 100KB/s
+    const MIN_DOWNLOAD_SPEED = 100 * 1024; // 100KB/s
+
+    if (!fileSize || fileSize <= 0) {
+      // 文件大小未知时使用默认值
+      return {
+        requestTimeout: BASE_REQUEST_TIMEOUT,
+        downloadTimeout: BASE_DOWNLOAD_TIMEOUT * 2.5 // 5分钟
+      };
+    }
+
+    // 根据文件大小计算超时时间
+    // 请求超时：基础时间 + 每100MB额外10秒
+    const requestTimeout = BASE_REQUEST_TIMEOUT + Math.ceil(fileSize / (100 * 1024 * 1024)) * 10000;
+
+    // 下载超时：基于最低速度计算，再加50%缓冲
+    const estimatedTime = (fileSize / MIN_DOWNLOAD_SPEED) * 1000; // 转换为毫秒
+    const downloadTimeout = Math.max(BASE_DOWNLOAD_TIMEOUT, estimatedTime * 1.5);
+
+    // 设置最大超时限制
+    const MAX_REQUEST_TIMEOUT = 180000; // 最大3分钟请求超时
+    const MAX_DOWNLOAD_TIMEOUT = 3600000; // 最大1小时下载超时
+
+    return {
+      requestTimeout: Math.min(requestTimeout, MAX_REQUEST_TIMEOUT),
+      downloadTimeout: Math.min(downloadTimeout, MAX_DOWNLOAD_TIMEOUT)
+    };
+  }
+
+  /**
    * 下载单个文件（带进度回调和增强错误处理）
    * @param {string} repoId - 仓库 ID
    * @param {Object} file - 文件信息
@@ -648,15 +712,19 @@ class HuggingFaceDownloader {
       safeDebug(logger, `断点续传下载: ${file.path} (从 ${existingSize} 字节开始)`);
     }
 
+    // 根据文件大小计算超时时间
+    const timeouts = this.calculateTimeouts(file.size);
+    safeDebug(logger, `文件 ${file.path} (${formatSize(file.size)}) 超时配置: 请求=${timeouts.requestTimeout / 1000}s, 下载=${timeouts.downloadTimeout / 1000}s`);
+
     // 使用增强的重试机制下载
     const fileSize = await retry(async() => {
       try {
-        const response = await axios({
+        const response = await axiosInstance({
           method: 'GET',
           url,
           headers,
           responseType: 'stream',
-          timeout: 60000, // 增加超时时间
+          timeout: timeouts.requestTimeout, // 使用动态计算的请求超时
           validateStatus: (status) => {
             // 接受 200 (完整下载) 和 206 (部分内容/断点续传)
             return status === 200 || status === 206;
@@ -680,29 +748,39 @@ class HuggingFaceDownloader {
         response.data.pipe(writeStream);
 
         return new Promise((resolve, reject) => {
+          // 设置超时定时器（使用动态计算的下载超时）
+          let timeout = setTimeout(() => {
+            cleanup();
+            writeStream.destroy();
+            reject(new Error('下载超时'));
+          }, timeouts.downloadTimeout); // 使用动态计算的下载超时
+
+          // 清理函数，确保在所有情况下都清理定时器
+          const cleanup = () => {
+            if (timeout) {
+              clearTimeout(timeout);
+              timeout = null;
+            }
+          };
+
           writeStream.on('finish', () => {
+            cleanup();
             resolve(downloadedBytes);
           });
 
           writeStream.on('error', (error) => {
-            // 清理部分下载的文件
-            fs.unlink(filePath).catch(() => {});
+            cleanup();
+            // 清理部分下载的文件，并记录错误
+            fs.unlink(filePath).catch(err => {
+              logger.warn(`清理失败文件时出错: ${err.message}`);
+            });
             reject(new Error(`文件写入失败: ${error.message}`));
           });
 
           response.data.on('error', (error) => {
+            cleanup();
             writeStream.destroy();
             reject(new Error(`网络传输失败: ${error.message}`));
-          });
-
-          // 添加超时处理
-          const timeout = setTimeout(() => {
-            writeStream.destroy();
-            reject(new Error('下载超时'));
-          }, 300000); // 5分钟超时
-
-          writeStream.on('finish', () => {
-            clearTimeout(timeout);
           });
         });
       } catch (error) {
