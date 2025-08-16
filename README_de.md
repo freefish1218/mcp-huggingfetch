@@ -1,7 +1,6 @@
 # MCP HuggingFace Schnell-Download-Tool
 
 [![npm version](https://badge.fury.io/js/mcp-huggingfetch.svg)](https://www.npmjs.com/package/mcp-huggingfetch)
-[![Tests](https://github.com/freefish1218/mcp-huggingfetch/actions/workflows/test.yml/badge.svg)](https://github.com/freefish1218/mcp-huggingfetch/actions/workflows/test.yml)
 [![npm downloads](https://img.shields.io/npm/dm/mcp-huggingfetch.svg)](https://www.npmjs.com/package/mcp-huggingfetch)
 
 ⚡ Hochgeschwindigkeits-HuggingFace-Modelldownloads mit gleichzeitigem Download, Fortsetzungsunterstützung und intelligentem Wiederholen - 3-5x schneller als herkömmliche Methoden. Unterstützt Claude Desktop, Claude Code, Cursor, VS Code und andere Clients.
