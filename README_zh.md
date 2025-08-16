@@ -2,6 +2,10 @@
 
 ⚡ 高速下载 HuggingFace 模型到本地 - 支持并发下载、断点续传、智能重试，比传统方式快3-5倍。支持 Claude Desktop、Claude Code、Cursor、VS Code 等客户端。
 
+<a href="https://glama.ai/mcp/servers/@freefish1218/mcp-huggingfetch">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@freefish1218/mcp-huggingfetch/badge" alt="HuggingFetch MCP server" />
+</a>
+
 [English](README.md) | [日本語](README_ja.md) | [Français](README_fr.md) | [Deutsch](README_de.md)
 
 ## 📋 快速配置
