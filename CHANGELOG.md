@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-09-24
+
+### Added
+- 增强文件列表功能支持递归目录遍历
+- 新增目录信息到返回结果中
+- 改进过滤逻辑，区分下载模式和列表模式
+
+### Changed
+- 优化path参数处理逻辑，支持从API URL路径直接过滤
+- 改进getFileList方法支持递归获取子目录文件
+- 增强filterFiles方法，支持allowEmpty参数控制
+
+### Improved
+- npm发布工作流使用npm install替代npm ci提升兼容性
+
 ## [1.2.1] - 2025-08-16
 
 ### Changed
