@@ -163,10 +163,14 @@ class HuggingFaceDownloader {
       result.likes = repoInfo.likes;
       result.downloads = repoInfo.downloads;
 
-      // 获取文件列表
-      const files = await retry(async() => {
-        return await this.getFileList(options, repoInfo, config.hf_token);
+      // 获取文件列表（包含目录信息）
+      const fileData = await retry(async() => {
+        return await this.getFileList(options, repoInfo, config.hf_token, true);
       }, 3, 1000);
+
+      // 处理返回的数据（可能是数组或对象）
+      let files = Array.isArray(fileData) ? fileData : (fileData.files || []);
+      let directories = Array.isArray(fileData) ? [] : (fileData.directories || []);
 
       // 如果指定了 pattern 参数，应用过滤
       let filteredFiles = files;
@@ -177,11 +181,7 @@ class HuggingFaceDownloader {
         });
       }
 
-      // 如果指定了 path 参数，只显示该路径下的文件
-      if (options.path) {
-        const pathPrefix = options.path.endsWith('/') ? options.path : options.path + '/';
-        filteredFiles = filteredFiles.filter(file => file.path.startsWith(pathPrefix));
-      }
+      // 注意：path 参数的过滤已经在 getFileList 中处理了，不需要再次过滤
 
       // 计算统计信息
       const totalSize = filteredFiles.reduce((sum, file) => sum + (file.size || 0), 0);
@@ -242,6 +242,15 @@ class HuggingFaceDownloader {
       result.total_size_bytes = totalSize;
       result.files = formattedFiles;
 
+      // 如果有目录，添加目录信息
+      if (directories.length > 0) {
+        result.directories = directories.map(dir => ({
+          path: dir.path,
+          type: 'directory'
+        }));
+        result.total_directories = directories.length;
+      }
+
       // 添加统计信息
       const typeStats = {};
       formattedFiles.forEach(file => {
@@ -259,7 +268,8 @@ class HuggingFaceDownloader {
         size: formatSize(stats.size_bytes)
       }));
 
-      safeInfo(logger, `文件列表获取成功: 共 ${result.total_files} 个文件，总大小 ${result.total_size}`);
+      const dirInfo = result.directories ? `，${result.total_directories} 个目录` : '';
+      safeInfo(logger, `文件列表获取成功: 共 ${result.total_files} 个文件${dirInfo}，总大小 ${result.total_size}`);
       return result;
     } catch (error) {
       safeError(logger, `获取文件列表失败: ${error.message}`);
@@ -391,9 +401,16 @@ class HuggingFaceDownloader {
    * @param {string} token - HuggingFace Token
    * @returns {Promise<Array>} 文件列表
    */
-  async getFileList(options, repoInfo, token) {
+  async getFileList(options, repoInfo, token, includeDirectories = false) {
     const revision = options.revision || 'main';
-    const url = `${this.apiUrl}/models/${options.repo_id}/tree/${revision}`;
+    // 如果指定了 path 参数，将其添加到 URL 路径中
+    let url = `${this.apiUrl}/models/${options.repo_id}/tree/${revision}`;
+    if (options.path) {
+      // 确保 path 不以斜杠开头
+      const pathParam = options.path.startsWith('/') ? options.path.substring(1) : options.path;
+      url = `${this.apiUrl}/models/${options.repo_id}/tree/${revision}/${pathParam}`;
+    }
+
     const headers = {};
 
     if (token) {
@@ -402,12 +419,75 @@ class HuggingFaceDownloader {
 
     try {
       const response = await axiosInstance.get(url, { headers, timeout: 10000 });
-      let files = response.data.filter(item => item.type === 'file');
+
+      // HuggingFace API 返回的数据可能包含文件和目录
+      let items = response.data;
+
+      // 分离文件和目录
+      let allFiles = [];
+      let directories = [];
+
+      for (const item of items) {
+        if (item.type === 'file') {
+          allFiles.push(item);
+        } else if (item.type === 'directory') {
+          directories.push(item);
+          safeDebug(logger, `发现子目录: ${item.path}`);
+        }
+      }
+
+      // 如果是下载模式且有目录，递归获取子目录中的文件
+      safeDebug(logger, `递归条件检查: includeDirectories=${includeDirectories}, options.path=${options.path}, directories.length=${directories.length}`);
+      if (!includeDirectories && !options.path && directories.length > 0) {
+        safeInfo(logger, `递归获取 ${directories.length} 个子目录的文件`);
+
+        // 递归函数，处理多层目录
+        const fetchDirRecursively = async (dirPath, maxDepth = 3, currentDepth = 1) => {
+          if (currentDepth > maxDepth) {
+            safeDebug(logger, `达到最大递归深度，停止递归: ${dirPath}`);
+            return;
+          }
+
+          try {
+            const subUrl = `${this.apiUrl}/models/${options.repo_id}/tree/${revision}/${dirPath}`;
+            safeDebug(logger, `获取目录 (深度${currentDepth}): ${dirPath}`);
+            const subResponse = await axiosInstance.get(subUrl, { headers, timeout: 10000 });
+
+            for (const subItem of subResponse.data) {
+              if (subItem.type === 'file') {
+                allFiles.push(subItem);
+                safeDebug(logger, `添加文件: ${subItem.path}`);
+              } else if (subItem.type === 'directory') {
+                safeDebug(logger, `发现子目录 (深度${currentDepth}): ${subItem.path}`);
+                // 递归处理子目录
+                await fetchDirRecursively(subItem.path, maxDepth, currentDepth + 1);
+              }
+            }
+          } catch (subError) {
+            safeError(logger, `获取目录 ${dirPath} 内容失败: ${subError.message}`);
+          }
+        };
+
+        // 对每个顶级目录进行递归处理
+        for (const dir of directories) {
+          await fetchDirRecursively(dir.path);
+        }
+
+        safeInfo(logger, `递归后共 ${allFiles.length} 个文件`);
+      }
+
+      // 如果需要包含目录信息，则返回包含目录的结果
+      if (includeDirectories || options.includeDirectories) {
+        return {
+          files: this.filterFiles(allFiles, options, true),  // listFiles 允许空列表
+          directories: directories
+        };
+      }
 
       // 应用文件过滤
-      files = this.filterFiles(files, options);
+      allFiles = this.filterFiles(allFiles, options, false);  // 下载时不允许空列表
 
-      return files;
+      return allFiles;
     } catch (error) {
       throw new Error(`获取文件列表失败: ${error.message}`);
     }
@@ -417,9 +497,10 @@ class HuggingFaceDownloader {
    * 增强的文件过滤功能
    * @param {Array} files - 文件列表
    * @param {Object} options - 下载选项
+   * @param {boolean} allowEmpty - 是否允许返回空列表（用于 listFiles）
    * @returns {Array} 过滤后的文件列表
    */
-  filterFiles(files, options) {
+  filterFiles(files, options, allowEmpty = false) {
     let filteredFiles = [...files];
     const originalCount = files.length;
 
@@ -514,7 +595,7 @@ class HuggingFaceDownloader {
 
     safeInfo(logger, `文件过滤完成: ${originalCount} -> ${filteredFiles.length} 个文件`);
 
-    if (filteredFiles.length === 0) {
+    if (filteredFiles.length === 0 && !allowEmpty) {
       throw new Error('过滤后没有文件需要下载，请检查过滤条件');
     }
 
