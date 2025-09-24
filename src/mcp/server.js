@@ -62,8 +62,9 @@ class McpServer {
         }
       } catch (error) {
         logger.error('处理消息失败:', error);
+        // 消息级别错误，没有有效的请求ID，使用null
         const errorResponse = JsonRpcResponse.error(
-          'unknown',
+          null,
           JsonRpcError.internalError(error.message)
         );
         // 使用 process.stdout.write 确保纯净的输出
@@ -100,6 +101,20 @@ class McpServer {
   }
 
   /**
+   * 从原始消息中提取 JSON-RPC ID（用于解析失败时的错误响应）
+   * @param {string} message - 原始消息
+   * @returns {string|number|null} 提取的ID或null
+   */
+  extractIdFromRawMessage(message) {
+    try {
+      const parsed = JSON.parse(message);
+      return parsed.id !== undefined ? parsed.id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 处理单个消息
    * @param {string} message - 输入消息
    * @returns {Promise<string|null>} 响应消息或 null（通知无需响应）
@@ -122,12 +137,15 @@ class McpServer {
     } catch (error) {
       logger.error('消息处理错误:', error);
 
+      // 尝试从原始消息中提取ID，解析失败时使用null
+      const requestId = this.extractIdFromRawMessage(message);
+
       if (error instanceof JsonRpcError) {
-        const response = JsonRpcResponse.error('unknown', error);
+        const response = JsonRpcResponse.error(requestId, error);
         return serializeJsonRpcMessage(response);
       } else {
         const response = JsonRpcResponse.error(
-          'unknown',
+          requestId,
           JsonRpcError.internalError(error.message)
         );
         return serializeJsonRpcMessage(response);

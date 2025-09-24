@@ -268,8 +268,9 @@ class HttpClient {
 
       // 控制并发数
       if (executing.length >= concurrency) {
-        await Promise.race(executing);
-        executing.splice(executing.findIndex(p => p === promise), 1);
+        // 追踪已完成的promise的索引
+        const settled = await Promise.race(executing.map((p, i) => p.then(() => i)));
+        executing.splice(settled, 1);
       }
     }
 

@@ -339,13 +339,19 @@ class FileListManager {
       this.sortFiles(files, config.sort);
     }
 
-    // 生成统计信息
-    const stats = this.generateStats(files, config);
+    // 截断文件列表并生成统计信息
+    const truncatedFiles = files.slice(0, config.maxFiles);
+    const stats = this.generateStats(truncatedFiles, config);
+
+    // 修正统计数据
+    stats.total_files = files.length; // 原始总数
+    stats.returned_files = truncatedFiles.length; // 实际返回数
+    stats.truncated = files.length > config.maxFiles;
 
     // 生成响应
     return {
       success: true,
-      files: files.slice(0, config.maxFiles),
+      files: truncatedFiles,
       stats,
       truncated: files.length > config.maxFiles,
       duration: Date.now() - startTime

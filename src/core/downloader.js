@@ -64,7 +64,7 @@ class HuggingFaceDownloader {
     try {
       // 创建过滤器选项（不是函数）
       const filterOptions = {
-        include: opts.files || opts.pattern,  // 优先使用files参数
+        include: opts.files || opts.pattern, // 优先使用files参数
         exclude: opts.exclude,
         maxSize: opts.maxSize,
         types: opts.types

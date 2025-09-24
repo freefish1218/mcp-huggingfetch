@@ -214,6 +214,16 @@ class DownloadQueue {
   }
 
   /**
+   * 动态设置最大并发数
+   */
+  setMaxConcurrent(value) {
+    if (value && value > 0) {
+      this.maxConcurrent = value;
+    }
+    return this;
+  }
+
+  /**
    * 处理队列
    */
   async processQueue() {
@@ -336,8 +346,14 @@ class DownloadManager {
       revision: options.revision || 'main'
     }));
 
+    // 统一处理强制重新下载标志（支持多种命名）
+    const shouldForceRedownload = options.force_redownload ||
+                                  options.forceRedownload ||
+                                  options.force ||
+                                  false;
+
     // 过滤已完成的任务
-    const pendingTasks = options.force_redownload
+    const pendingTasks = shouldForceRedownload
       ? tasks
       : tasks.filter(task => !task.isCompleted());
 
@@ -351,6 +367,11 @@ class DownloadManager {
     }
 
     logger.info(`开始下载 ${pendingTasks.length} 个文件`);
+
+    // 应用并发设置
+    if (options.maxConcurrent) {
+      this.queue.setMaxConcurrent(options.maxConcurrent);
+    }
 
     // 添加到队列
     this.queue.addTasks(pendingTasks);
@@ -404,7 +425,8 @@ class DownloadManager {
         // 服务器不支持断点续传，重新下载
         logger.warn('服务器不支持断点续传，重新下载');
         task.downloadedBytes = 0;
-        fs.unlinkSync(tempPath);
+        // 使用 force 选项避免文件不存在的错误
+        fs.rmSync(tempPath, { force: true });
       }
 
       // 创建写入流

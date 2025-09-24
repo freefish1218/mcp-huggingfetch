@@ -11,10 +11,8 @@ const { createLogger } = require('../src/utils/logger');
 // 设置 MCP 模式标志
 process.env.MCP_MODE = 'true';
 
-// 为 Claude Code 兼容性设置默认环境变量
-if (!process.env.HUGGINGFACE_TOKEN && !process.env.HF_TOKEN) {
-  process.env.HUGGINGFACE_TOKEN = 'default_token_placeholder';
-}
+// Token 验证由各模块内部处理，不设置占位符
+// 让验证逻辑明确提示用户配置 HUGGINGFACE_TOKEN 或 HF_TOKEN
 
 // MCP 模式下设置日志级别和文件
 if (!process.env.LOG_LEVEL) {
