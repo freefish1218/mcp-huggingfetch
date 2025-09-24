@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-09-24
+
+### Added
+- 新增 `explore_huggingface_repo` 工具，支持仓库目录结构探索
+- 新增 `search_huggingface_files` 工具，支持文件名搜索功能
+- 增强文件列表功能，支持更精细的过滤和排序选项
+
+### Changed
+- 重构代码结构，将单体 `downloader.js` 拆分为多个独立模块
+- 改进代码可维护性和测试友好性
+- 优化下载响应大小，防止 413 错误
+
+### Improved
+- 完善文档结构，新增工具使用说明和示例
+- 移除过时的文档和脚本文件
+
 ## [1.3.0] - 2025-09-24
 
 ### Added
