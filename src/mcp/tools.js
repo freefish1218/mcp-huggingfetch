@@ -37,7 +37,7 @@ class HuggingFetchTools {
   getListTool() {
     return new Tool(
       'list_huggingface_files',
-      '列出 HuggingFace 仓库中的所有文件，包括文件路径、大小、类型等详细信息',
+      '列出 HuggingFace 仓库中的所有文件，支持递归获取子目录、探索模式、智能建议等高级功能',
       {
         type: 'object',
         properties: {
@@ -55,15 +55,52 @@ class HuggingFetchTools {
             type: 'string',
             description: '仓库内的子路径（可选，用于浏览特定目录）'
           },
+          // 递归控制
+          recursive: {
+            type: 'boolean',
+            description: '是否递归获取子目录文件，默认为 true',
+            default: true
+          },
+          max_depth: {
+            type: 'integer',
+            description: '最大递归深度，默认为 3',
+            default: 3,
+            minimum: 1,
+            maximum: 10
+          },
+          max_files: {
+            type: 'integer',
+            description: '最大返回文件数，默认为 100',
+            default: 100,
+            minimum: 1,
+            maximum: 10000
+          },
+          // 过滤选项
           pattern: {
             type: 'string',
             description: '文件名过滤模式（glob 模式），例如: *.safetensors, *.json'
           },
+          max_size_per_file: {
+            type: 'string',
+            description: '单文件大小限制（仅用于过滤），例如: 50MB, 1GB'
+          },
+          // 显示控制
           sort_by: {
             type: 'string',
-            description: '排序方式: size（按大小）, name（按名称）, type（按类型）',
-            enum: ['size', 'name', 'type'],
-            default: 'name'
+            description: '排序方式: size（按大小）, name（按名称）, type（按类型）, path（按路径）',
+            enum: ['size', 'name', 'type', 'path'],
+            default: 'path'
+          },
+          show_directories: {
+            type: 'boolean',
+            description: '是否显示目录信息，默认为 true',
+            default: true
+          },
+          // 探索模式
+          explore_mode: {
+            type: 'boolean',
+            description: '探索模式：仅返回目录结构，不获取文件详情，适合快速了解仓库结构',
+            default: false
           }
         },
         required: ['repo_id']

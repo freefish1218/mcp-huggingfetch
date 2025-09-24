@@ -14,7 +14,6 @@ const {
   formatSize,
   formatDuration,
   calculateDirectorySize,
-  getFilesInDirectory,
   countFilesInDirectory,
   ensureDirectory,
   createProgressTracker,
@@ -132,23 +131,200 @@ class HuggingFaceDownloader {
   }
 
   /**
+   * 生成智能建议
+   * @param {Object} result - 当前结果
+   * @param {Object} options - 用户选项
+   * @returns {Object} 建议对象
+   */
+  generateSuggestions(result, options) {
+    const suggestions = {
+      has_large_files: false,
+      recommended_pattern: null,
+      next_actions: []
+    };
+
+    // 检查是否有大文件
+    const largeFiles = result.files.filter(f => f.size_bytes > 1024 * 1024 * 1024); // > 1GB
+    if (largeFiles.length > 0) {
+      suggestions.has_large_files = true;
+      suggestions.next_actions.push(
+        `发现 ${largeFiles.length} 个大于 1GB 的文件，建议使用 files 参数指定需要的文件`
+      );
+    }
+
+    // 根据文件数量限制提供建议
+    if (result.limits_reached.max_files) {
+      suggestions.next_actions.push(
+        `仓库文件数超过限制（${options.max_files || 100}个），可以增加 max_files 参数或使用 pattern 过滤`
+      );
+    }
+
+    // 根据截断路径提供建议
+    if (result.limits_reached.truncated_paths && result.limits_reached.truncated_paths.length > 0) {
+      suggestions.next_actions.push(
+        `有 ${result.limits_reached.truncated_paths.length} 个路径被截断，可使用 path 参数单独探索：${result.limits_reached.truncated_paths[0]}`
+      );
+    }
+
+    // 推荐过滤模式
+    if (result.statistics && result.statistics.length > 0) {
+      const modelFiles = result.statistics.find(s => s.type === 'model');
+      if (modelFiles && modelFiles.count > 0) {
+        suggestions.recommended_pattern = '*.safetensors';
+        suggestions.next_actions.push(
+          `发现 ${modelFiles.count} 个模型文件，可使用 pattern='*.safetensors' 过滤`
+        );
+      }
+    }
+
+    // 如果有目录，建议探索
+    if (result.directories && result.directories.length > 0) {
+      suggestions.next_actions.push(
+        `发现 ${result.directories.length} 个子目录，可使用 path='${result.directories[0].path}' 探索特定目录`
+      );
+    }
+
+    // 建议使用探索模式
+    if (!options.explore_mode && result.stats.total_files > 500) {
+      suggestions.next_actions.push(
+        '文件数量较多，建议先使用 explore_mode=true 了解仓库结构'
+      );
+    }
+
+    return suggestions;
+  }
+
+  /**
+   * 扫描目录结构（探索模式）
+   * @param {string} repoId - 仓库 ID
+   * @param {string} revision - 分支或标签
+   * @param {string} token - HuggingFace Token
+   * @param {number} maxDepth - 最大深度
+   * @returns {Promise<Object>} 目录结构
+   */
+  async scanDirectoryStructure(repoId, revision, token, maxDepth = 3) {
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const structure = {};
+
+    const scanDir = async(path = '', depth = 1) => {
+      if (depth > maxDepth) return;
+
+      const url = path
+        ? `${this.apiUrl}/models/${repoId}/tree/${revision}/${path}`
+        : `${this.apiUrl}/models/${repoId}/tree/${revision}`;
+
+      try {
+        const response = await axiosInstance.get(url, { headers, timeout: 10000 });
+        const items = response.data;
+
+        for (const item of items) {
+          if (item.type === 'directory') {
+            const dirPath = item.path;
+            structure[dirPath] = {
+              type: 'directory',
+              file_count: 0,
+              total_size: 0,
+              subdirs: []
+            };
+
+            // 递归扫描子目录
+            const subStructure = await scanDir(dirPath, depth + 1);
+            if (subStructure) {
+              structure[dirPath].subdirs = Object.keys(subStructure)
+                .filter(key => key.startsWith(dirPath + '/'))
+                .map(key => key.replace(dirPath + '/', '').split('/')[0])
+                .filter((v, i, a) => a.indexOf(v) === i); // 去重
+            }
+          } else if (item.type === 'file') {
+            // 统计文件信息到父目录
+            const parentDir = path || '/';
+            if (!structure[parentDir]) {
+              structure[parentDir] = {
+                type: 'directory',
+                file_count: 0,
+                total_size: 0,
+                subdirs: []
+              };
+            }
+            structure[parentDir].file_count++;
+            structure[parentDir].total_size += item.size || 0;
+          }
+        }
+      } catch (error) {
+        safeDebug(logger, `扫描目录失败 ${path}: ${error.message}`);
+      }
+
+      return structure;
+    };
+
+    await scanDir('', 1);
+
+    // 格式化大小
+    for (const key in structure) {
+      if (structure[key].total_size) {
+        structure[key].total_size_formatted = formatSize(structure[key].total_size);
+      }
+    }
+
+    return structure;
+  }
+
+  /**
    * 列出仓库中的文件
    * @param {Object} options - 列表选项
    * @param {Object} config - 应用配置
    * @returns {Promise<Object>} 文件列表结果
    */
   async listFiles(options, config) {
+    const startTime = Date.now();
     const result = {
       success: false,
       repo_id: options.repo_id,
       revision: options.revision || 'main',
-      total_files: 0,
-      total_size: 0,
+      // 新增统计信息
+      stats: {
+        total_files: 0,
+        returned_files: 0,
+        total_directories: 0,
+        total_size: 0,
+        max_depth_reached: 0,
+        scan_time: 0
+      },
+      // 限制触发信息
+      limits_reached: {
+        max_files: false,
+        max_depth: false,
+        truncated_paths: []
+      },
       files: [],
-      error: null
+      directories: [],
+      error: null,
+      // 向后兼容
+      total_files: 0,
+      total_size: 0
     };
 
     try {
+      // 探索模式：仅返回目录结构
+      if (options.explore_mode) {
+        safeInfo(logger, `探索模式：获取仓库目录结构 ${options.repo_id}`);
+        result.mode = 'explore';
+        const directoryStructure = await this.scanDirectoryStructure(
+          options.repo_id,
+          options.revision || 'main',
+          config.hf_token,
+          options.max_depth || 3
+        );
+        result.directory_tree = directoryStructure;
+        result.success = true;
+        result.stats.scan_time = `${((Date.now() - startTime) / 1000).toFixed(1)}s`;
+        return result;
+      }
+
       safeInfo(logger, `获取仓库文件列表: ${options.repo_id}`);
 
       // 获取仓库信息
@@ -171,6 +347,18 @@ class HuggingFaceDownloader {
       // 处理返回的数据（可能是数组或对象）
       const files = Array.isArray(fileData) ? fileData : (fileData.files || []);
       const directories = Array.isArray(fileData) ? [] : (fileData.directories || []);
+      const truncatedPaths = Array.isArray(fileData) ? [] : (fileData.truncatedPaths || []);
+
+      // 更新限制触发信息
+      if (truncatedPaths.length > 0) {
+        result.limits_reached.truncated_paths = truncatedPaths;
+        // 判断是因为文件数还是深度限制
+        if (files.length >= (options.max_files || 100)) {
+          result.limits_reached.max_files = true;
+        }
+        const maxDepthUsed = options.max_depth || 3;
+        result.stats.max_depth_reached = maxDepthUsed;
+      }
 
       // 如果指定了 pattern 参数，应用过滤
       let filteredFiles = files;
@@ -237,6 +425,15 @@ class HuggingFaceDownloader {
 
       // 组装结果
       result.success = true;
+
+      // 更新统计信息
+      result.stats.total_files = files.length; // 原始文件总数
+      result.stats.returned_files = formattedFiles.length; // 实际返回的文件数
+      result.stats.total_directories = directories.length;
+      result.stats.total_size = formatSize(totalSize);
+      result.stats.scan_time = `${((Date.now() - startTime) / 1000).toFixed(1)}s`;
+
+      // 向后兼容的字段
       result.total_files = formattedFiles.length;
       result.total_size = formatSize(totalSize);
       result.total_size_bytes = totalSize;
@@ -267,6 +464,9 @@ class HuggingFaceDownloader {
         count: stats.count,
         size: formatSize(stats.size_bytes)
       }));
+
+      // 生成智能建议
+      result.suggestions = this.generateSuggestions(result, options);
 
       const dirInfo = result.directories ? `，${result.total_directories} 个目录` : '';
       safeInfo(logger, `文件列表获取成功: 共 ${result.total_files} 个文件${dirInfo}，总大小 ${result.total_size}`);
@@ -436,15 +636,31 @@ class HuggingFaceDownloader {
         }
       }
 
-      // 如果是下载模式且有目录，递归获取子目录中的文件
-      safeDebug(logger, `递归条件检查: includeDirectories=${includeDirectories}, options.path=${options.path}, directories.length=${directories.length}`);
-      if (!includeDirectories && !options.path && directories.length > 0) {
+      // 递归获取子目录中的文件
+      const shouldRecurse = options.recursive !== false; // 默认递归
+      const maxDepth = options.max_depth || 3; // 最大递归深度，默认3
+      const maxFiles = options.max_files || 100; // 最大文件数，默认100
+      let fileCount = allFiles.length; // 当前已有的文件数
+      const truncatedPaths = []; // 记录被截断的路径
+
+      safeDebug(logger, `递归配置: recursive=${shouldRecurse}, maxDepth=${maxDepth}, maxFiles=${maxFiles}, currentFiles=${fileCount}`);
+
+      if (shouldRecurse && !options.path && directories.length > 0) {
         safeInfo(logger, `递归获取 ${directories.length} 个子目录的文件`);
 
         // 递归函数，处理多层目录
-        const fetchDirRecursively = async(dirPath, maxDepth = 3, currentDepth = 1) => {
+        const fetchDirRecursively = async(dirPath, currentDepth = 1) => {
+          // 检查深度限制
           if (currentDepth > maxDepth) {
-            safeDebug(logger, `达到最大递归深度，停止递归: ${dirPath}`);
+            safeDebug(logger, `达到最大递归深度 ${maxDepth}，跳过: ${dirPath}`);
+            truncatedPaths.push(dirPath);
+            return;
+          }
+
+          // 检查文件数量限制
+          if (fileCount >= maxFiles) {
+            safeDebug(logger, `达到最大文件数 ${maxFiles}，跳过: ${dirPath}`);
+            truncatedPaths.push(dirPath);
             return;
           }
 
@@ -455,12 +671,20 @@ class HuggingFaceDownloader {
 
             for (const subItem of subResponse.data) {
               if (subItem.type === 'file') {
-                allFiles.push(subItem);
-                safeDebug(logger, `添加文件: ${subItem.path}`);
+                // 检查文件数量限制
+                if (fileCount < maxFiles) {
+                  allFiles.push(subItem);
+                  fileCount++;
+                  safeDebug(logger, `添加文件 (${fileCount}/${maxFiles}): ${subItem.path}`);
+                } else {
+                  safeDebug(logger, '达到文件数限制，停止添加文件');
+                  truncatedPaths.push(dirPath);
+                  break;
+                }
               } else if (subItem.type === 'directory') {
                 safeDebug(logger, `发现子目录 (深度${currentDepth}): ${subItem.path}`);
                 // 递归处理子目录
-                await fetchDirRecursively(subItem.path, maxDepth, currentDepth + 1);
+                await fetchDirRecursively(subItem.path, currentDepth + 1);
               }
             }
           } catch (subError) {
@@ -470,17 +694,18 @@ class HuggingFaceDownloader {
 
         // 对每个顶级目录进行递归处理
         for (const dir of directories) {
-          await fetchDirRecursively(dir.path);
+          await fetchDirRecursively(dir.path, 1);
         }
 
-        safeInfo(logger, `递归后共 ${allFiles.length} 个文件`);
+        safeInfo(logger, `递归后共 ${allFiles.length} 个文件, 截断路径数: ${truncatedPaths.length}`);
       }
 
       // 如果需要包含目录信息，则返回包含目录的结果
       if (includeDirectories || options.includeDirectories) {
         return {
           files: this.filterFiles(allFiles, options, true), // listFiles 允许空列表
-          directories
+          directories,
+          truncatedPaths: truncatedPaths.length > 0 ? truncatedPaths : undefined
         };
       }
 
