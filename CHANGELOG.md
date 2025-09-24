@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2025-09-24
+
+### Fixed
+- 修复 JSON-RPC 错误响应 ID 不符合规范的问题
+- 修复 HTTP 批量请求并发控制 Promise.race 逻辑错误
+- 统一强制重新下载标志处理，支持多种命名方式
+- 实现下载队列动态并发数配置功能
+- 修复文件列表统计数据不一致问题
+- 改进断点续传错误处理健壮性
+- 移除 CLI 中的 token 占位符避免认证混淆
+- 修复缓存清理、目录遍历和工作流配置问题
+
 ## [1.4.0] - 2025-09-24
 
 ### Added
