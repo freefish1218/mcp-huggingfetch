@@ -24,17 +24,19 @@ class HuggingFetchTools {
   getTools() {
     return [
       this.getDownloadTool(),
-      this.getListTool()
+      this.getListTool(),
+      this.getExploreTool(),
+      this.getSearchTool()
     ];
   }
 
   /**
-   * 列表文件工具定义
+   * 列表文件工具定义 - 标准文件列表
    */
   getListTool() {
     return new Tool(
       'list_huggingface_files',
-      '列出 HuggingFace 仓库中的文件',
+      '列出 HuggingFace 仓库中的文件，支持过滤和排序',
       {
         type: 'object',
         properties: {
@@ -71,15 +73,80 @@ class HuggingFetchTools {
             enum: ['name', 'size', 'type'],
             description: '排序方式',
             default: 'name'
-          },
-          mode: {
-            type: 'string',
-            enum: ['standard', 'explore', 'search'],
-            description: '列表模式',
-            default: 'standard'
           }
         },
         required: ['repo_id']
+      }
+    );
+  }
+
+  /**
+   * 探索仓库工具定义 - 获取目录结构
+   */
+  getExploreTool() {
+    return new Tool(
+      'explore_huggingface_repo',
+      '探索 HuggingFace 仓库的目录结构，返回层级化的文件树',
+      {
+        type: 'object',
+        properties: {
+          repo_id: {
+            type: 'string',
+            description: 'HuggingFace 仓库 ID（格式：owner/repo）',
+            examples: ['2Noise/ChatTTS', 'microsoft/DialoGPT-medium']
+          },
+          revision: {
+            type: 'string',
+            description: 'Git 分支或标签',
+            default: 'main'
+          },
+          max_depth: {
+            type: 'integer',
+            description: '最大扫描深度',
+            default: 3
+          },
+          tree_view: {
+            type: 'boolean',
+            description: '是否生成ASCII树形视图',
+            default: false
+          }
+        },
+        required: ['repo_id']
+      }
+    );
+  }
+
+  /**
+   * 搜索文件工具定义 - 按名称搜索文件
+   */
+  getSearchTool() {
+    return new Tool(
+      'search_huggingface_files',
+      '在 HuggingFace 仓库中搜索特定文件',
+      {
+        type: 'object',
+        properties: {
+          repo_id: {
+            type: 'string',
+            description: 'HuggingFace 仓库 ID（格式：owner/repo）',
+            examples: ['2Noise/ChatTTS', 'microsoft/DialoGPT-medium']
+          },
+          query: {
+            type: 'string',
+            description: '搜索关键词或模式'
+          },
+          revision: {
+            type: 'string',
+            description: 'Git 分支或标签',
+            default: 'main'
+          },
+          max_results: {
+            type: 'integer',
+            description: '最大结果数',
+            default: 50
+          }
+        },
+        required: ['repo_id', 'query']
       }
     );
   }
@@ -220,7 +287,7 @@ class HuggingFetchTools {
   }
 
   /**
-   * 调用列表工具
+   * 调用列表工具 - 标准文件列表
    */
   async callListTool(args) {
     try {
@@ -233,7 +300,7 @@ class HuggingFetchTools {
 
       logger.info(`列出文件: ${args.repo_id}`);
 
-      // 构建选项
+      // 构建选项 - 固定mode为standard
       const options = {
         revision: args.revision,
         pattern: args.pattern,
@@ -241,7 +308,7 @@ class HuggingFetchTools {
         maxFiles: args.max_files,
         maxDepth: args.max_depth,
         sort: args.sort,
-        mode: args.mode,
+        mode: 'standard', // 固定为标准模式
         token: args.token || process.env.HF_TOKEN
       };
 
@@ -267,6 +334,128 @@ class HuggingFetchTools {
       logger.error('工具调用失败:', error);
       return CallToolResult.error(
         ToolContent.text(`工具调用失败: ${error.message}`)
+      );
+    }
+  }
+
+  /**
+   * 调用探索工具 - 仓库结构探索
+   */
+  async callExploreTool(args) {
+    try {
+      // 基础验证
+      if (!args.repo_id) {
+        return CallToolResult.error(
+          ToolContent.text('缺少必需参数: repo_id')
+        );
+      }
+
+      logger.info(`探索仓库: ${args.repo_id}`);
+
+      // 构建选项
+      const options = {
+        revision: args.revision,
+        maxDepth: args.max_depth,
+        mode: 'explore', // 探索模式
+        treeView: args.tree_view,
+        token: args.token || process.env.HF_TOKEN
+      };
+
+      // 执行探索
+      const result = await this.downloader.list(args.repo_id, options);
+
+      if (result.success) {
+        logger.info(`探索完成: 深度${result.stats?.depth || 0}`);
+        return CallToolResult.success(
+          ToolContent.text(JSON.stringify(result, null, 2))
+        );
+      } else {
+        logger.error('探索失败:', result.error);
+        return CallToolResult.error(
+          ToolContent.text(JSON.stringify({
+            success: false,
+            error: result.error,
+            suggestions: result.suggestions
+          }, null, 2))
+        );
+      }
+    } catch (error) {
+      logger.error('工具调用失败:', error);
+      return CallToolResult.error(
+        ToolContent.text(`工具调用失败: ${error.message}`)
+      );
+    }
+  }
+
+  /**
+   * 调用搜索工具 - 文件搜索
+   */
+  async callSearchTool(args) {
+    try {
+      // 基础验证
+      if (!args.repo_id) {
+        return CallToolResult.error(
+          ToolContent.text('缺少必需参数: repo_id')
+        );
+      }
+
+      if (!args.query) {
+        return CallToolResult.error(
+          ToolContent.text('缺少必需参数: query')
+        );
+      }
+
+      logger.info(`搜索文件: ${args.repo_id} - ${args.query}`);
+
+      // 使用search方法而不是list
+      const result = await this.downloader.search(args.repo_id, args.query, {
+        revision: args.revision,
+        maxFiles: args.max_results,
+        token: args.token || process.env.HF_TOKEN
+      });
+
+      if (result.success) {
+        logger.info(`找到 ${result.files?.length || 0} 个匹配文件`);
+        return CallToolResult.success(
+          ToolContent.text(JSON.stringify(result, null, 2))
+        );
+      } else {
+        logger.error('搜索失败:', result.error);
+        return CallToolResult.error(
+          ToolContent.text(JSON.stringify({
+            success: false,
+            error: result.error,
+            suggestions: result.suggestions
+          }, null, 2))
+        );
+      }
+    } catch (error) {
+      logger.error('工具调用失败:', error);
+      return CallToolResult.error(
+        ToolContent.text(`工具调用失败: ${error.message}`)
+      );
+    }
+  }
+
+  /**
+   * 统一工具调用入口
+   * @param {string} name - 工具名称
+   * @param {object} args - 工具参数
+   * @returns {Promise<CallToolResult>} 调用结果
+   */
+  async callTool(name, args) {
+    switch (name) {
+    case 'download_huggingface_model':
+      return await this.callDownloadTool(args);
+    case 'list_huggingface_files':
+      return await this.callListTool(args);
+    case 'explore_huggingface_repo':
+      return await this.callExploreTool(args);
+    case 'search_huggingface_files':
+      return await this.callSearchTool(args);
+    default:
+      return CallToolResult.error(
+        ToolContent.text(`未知工具: ${name}`)
       );
     }
   }

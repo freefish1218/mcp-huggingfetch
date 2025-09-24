@@ -80,18 +80,26 @@ After configuration, use the following features directly in conversations:
 
 ### 📋 List Files
 
-View repository files before downloading:
+View and filter repository files:
 
 ```
-List all files in the 2Noise/ChatTTS repository
+List JSON files in the 2Noise/ChatTTS repository
 ```
 
-```
-Show JSON files in the bert-base-uncased repository
-```
+### 🔍 Explore Repository
+
+Understand repository structure:
 
 ```
-Display files in openai/whisper-large-v3 sorted by size
+Explore the directory structure of microsoft/DialoGPT-medium
+```
+
+### 🔎 Search Files
+
+Find specific files by name:
+
+```
+Search for config files in openai/whisper-large-v3
 ```
 
 ### 📥 Download Models
@@ -110,17 +118,42 @@ Download microsoft/DialoGPT-medium model, only .bin files
 Download openai/whisper-large-v3 model, exclude test files
 ```
 
-## 📝 Supported Features
+## 📝 Available Tools
 
-### List Tool Options (`list_huggingface_files`)
+### File Listing (`list_huggingface_files`)
 
-| Parameter | Type | Description | Example |
+List and filter repository files with pattern matching and sorting.
+
+| Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `repo_id` | string | HuggingFace repository ID | `"2Noise/ChatTTS"` |
-| `revision` | string | Git branch/tag | `"main"`, `"v1.0"` |
-| `path` | string | Repository sub-path | `"models/"` |
-| `pattern` | string | File name filter pattern | `"*.json"`, `"*.safetensors"` |
-| `sort_by` | string | Sort method | `"size"`, `"name"`, `"type"` |
+| `repo_id` | string | HuggingFace repository ID | - |
+| `revision` | string | Git branch/tag | `"main"` |
+| `pattern` | string | File filter pattern (glob) | - |
+| `exclude` | string | Exclusion pattern | - |
+| `max_files` | number | Maximum files to return | `100` |
+| `sort` | string | Sort by: `name`, `size`, `type` | `"name"` |
+
+### Repository Explorer (`explore_huggingface_repo`)
+
+Explore repository structure and get hierarchical file tree.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `repo_id` | string | HuggingFace repository ID | - |
+| `revision` | string | Git branch/tag | `"main"` |
+| `max_depth` | number | Maximum scan depth | `3` |
+| `tree_view` | boolean | Generate ASCII tree view | `false` |
+
+### File Search (`search_huggingface_files`)
+
+Search files by name or pattern within repository.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `repo_id` | string | HuggingFace repository ID | - |
+| `query` | string | Search keyword or pattern | - |
+| `revision` | string | Git branch/tag | `"main"` |
+| `max_results` | number | Maximum results to return | `50` |
 
 ### Download Tool Options (`download_huggingface_model`)
 
