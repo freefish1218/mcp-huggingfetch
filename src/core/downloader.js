@@ -15,6 +15,7 @@ const {
   formatDuration,
   calculateDirectorySize,
   getFilesInDirectory,
+  countFilesInDirectory,
   ensureDirectory,
   createProgressTracker,
   retry
@@ -116,7 +117,7 @@ class HuggingFaceDownloader {
       const duration = Date.now() - startTime;
       result.duration = formatDuration(duration);
       result.success = true;
-      result.progress_events = progress.getEvents();
+      result.progress_events = []; // 不返回进度事件以减少响应大小
 
       progress.complete('下载完成');
       safeInfo(logger, `模型 ${options.repo_id} 下载完成，耗时: ${result.duration}`);
@@ -125,8 +126,7 @@ class HuggingFaceDownloader {
     } catch (error) {
       safeError(logger, `下载失败: ${error.message}`);
       result.error = error.message;
-      result.progress_events = progress.getEvents();
-      result.progress_events.push(`下载失败: ${error.message}`);
+      result.progress_events = []; // 不返回进度事件以减少响应大小
       return result;
     }
   }
@@ -169,8 +169,8 @@ class HuggingFaceDownloader {
       }, 3, 1000);
 
       // 处理返回的数据（可能是数组或对象）
-      let files = Array.isArray(fileData) ? fileData : (fileData.files || []);
-      let directories = Array.isArray(fileData) ? [] : (fileData.directories || []);
+      const files = Array.isArray(fileData) ? fileData : (fileData.files || []);
+      const directories = Array.isArray(fileData) ? [] : (fileData.directories || []);
 
       // 如果指定了 pattern 参数，应用过滤
       let filteredFiles = files;
@@ -421,11 +421,11 @@ class HuggingFaceDownloader {
       const response = await axiosInstance.get(url, { headers, timeout: 10000 });
 
       // HuggingFace API 返回的数据可能包含文件和目录
-      let items = response.data;
+      const items = response.data;
 
       // 分离文件和目录
       let allFiles = [];
-      let directories = [];
+      const directories = [];
 
       for (const item of items) {
         if (item.type === 'file') {
@@ -442,7 +442,7 @@ class HuggingFaceDownloader {
         safeInfo(logger, `递归获取 ${directories.length} 个子目录的文件`);
 
         // 递归函数，处理多层目录
-        const fetchDirRecursively = async (dirPath, maxDepth = 3, currentDepth = 1) => {
+        const fetchDirRecursively = async(dirPath, maxDepth = 3, currentDepth = 1) => {
           if (currentDepth > maxDepth) {
             safeDebug(logger, `达到最大递归深度，停止递归: ${dirPath}`);
             return;
@@ -479,13 +479,13 @@ class HuggingFaceDownloader {
       // 如果需要包含目录信息，则返回包含目录的结果
       if (includeDirectories || options.includeDirectories) {
         return {
-          files: this.filterFiles(allFiles, options, true),  // listFiles 允许空列表
-          directories: directories
+          files: this.filterFiles(allFiles, options, true), // listFiles 允许空列表
+          directories
         };
       }
 
       // 应用文件过滤
-      allFiles = this.filterFiles(allFiles, options, false);  // 下载时不允许空列表
+      allFiles = this.filterFiles(allFiles, options, false); // 下载时不允许空列表
 
       return allFiles;
     } catch (error) {
@@ -902,8 +902,10 @@ class HuggingFaceDownloader {
    */
   async finalizeDownload(result, targetDir, progress) {
     try {
-      // 获取下载的文件列表
-      result.files_downloaded = await getFilesInDirectory(targetDir);
+      // 只统计文件数量，不获取完整列表
+      const filesCount = await countFilesInDirectory(targetDir);
+      result.files_downloaded = []; // 返回空数组以保持兼容性
+      result.files_count = filesCount;
 
       // 计算下载大小
       const totalSize = await calculateDirectorySize(targetDir);
@@ -913,6 +915,8 @@ class HuggingFaceDownloader {
     } catch (error) {
       safeError(logger, `完成下载处理时出错: ${error.message}`);
       // 不抛出错误，因为下载可能已经成功
+      result.files_downloaded = [];
+      result.files_count = 0;
     }
   }
 }

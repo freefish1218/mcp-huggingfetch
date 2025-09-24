@@ -134,6 +134,37 @@ async function getFilesInDirectory(dirPath, basePath = dirPath) {
 }
 
 /**
+ * 递归计算目录中的文件数量（不返回文件列表）
+ * @param {string} dirPath - 目录路径
+ * @returns {Promise<number>} 文件数量
+ */
+async function countFilesInDirectory(dirPath) {
+  let count = 0;
+
+  try {
+    const stats = await fs.stat(dirPath);
+
+    if (stats.isFile()) {
+      return 1;
+    }
+
+    if (stats.isDirectory()) {
+      const entries = await fs.readdir(dirPath);
+
+      for (const entry of entries) {
+        const entryPath = path.join(dirPath, entry);
+        const entryCount = await countFilesInDirectory(entryPath);
+        count += entryCount;
+      }
+    }
+  } catch (error) {
+    logger.warn(`计算文件数量时出错: ${error.message}`);
+  }
+
+  return count;
+}
+
+/**
  * 确保目录存在，如果不存在则创建
  * @param {string} dirPath - 目录路径
  * @returns {Promise<void>}
@@ -291,6 +322,7 @@ module.exports = {
   formatDuration,
   calculateDirectorySize,
   getFilesInDirectory,
+  countFilesInDirectory,
   ensureDirectory,
   safeRemove,
   pathExists,

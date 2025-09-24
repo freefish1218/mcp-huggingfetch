@@ -194,10 +194,9 @@ class HuggingFetchTools {
           success: result.success,
           model_name: result.model_name,
           download_path: result.download_path,
-          files_downloaded: result.files_downloaded,
+          total_files: result.files_downloaded ? result.files_downloaded.length : 0,
           download_size: result.download_size,
-          duration: result.duration,
-          progress_events: result.progress_events
+          duration: result.duration
         };
 
         return CallToolResult.success(
