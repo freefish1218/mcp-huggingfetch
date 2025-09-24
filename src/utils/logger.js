@@ -150,8 +150,12 @@ function sanitizeEnvVars(env) {
   return safeEnv;
 }
 
+// 添加 getLogger 作为 createLogger 的别名
+const getLogger = createLogger;
+
 module.exports = {
   createLogger,
+  getLogger,
   safeLog,
   safeDebug,
   safeInfo,
