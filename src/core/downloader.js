@@ -64,7 +64,7 @@ class HuggingFaceDownloader {
     try {
       // 创建过滤器选项（不是函数）
       const filterOptions = {
-        include: opts.pattern,
+        include: opts.files || opts.pattern,  // 优先使用files参数
         exclude: opts.exclude,
         maxSize: opts.maxSize,
         types: opts.types
@@ -241,8 +241,8 @@ class HuggingFaceDownloader {
    * 清理资源
    */
   cleanup() {
-    if (this.cache) {
-      this.cache.stop();
+    if (this.cache && this.cache.destroy) {
+      this.cache.destroy();
     }
   }
 }

@@ -52,8 +52,8 @@ class DirectoryWalker {
             };
           }
         } else if (item.type === 'directory') {
-          // 递归遍历子目录
-          const subPath = path ? `${path}/${item.path}` : item.path;
+          // 递归遍历子目录 - API返回的item.path已经是完整路径
+          const subPath = item.path;
           yield * this.walk(repoId, subPath, revision, token, depth + 1);
         }
       }
@@ -98,7 +98,8 @@ class DirectoryWalker {
    */
   buildApiUrl(repoId, path = '', revision = 'main') {
     const baseUrl = 'https://huggingface.co/api/models';
-    const encodedPath = path ? `/${encodeURIComponent(path)}` : '';
+    // 不对斜杠进行编码，HuggingFace API需要保留路径分隔符
+    const encodedPath = path ? `/${path}` : '';
     return `${baseUrl}/${repoId}/tree/${revision}${encodedPath}`;
   }
 

@@ -1,5 +1,13 @@
 // Jest 测试文件
 describe('MCP HuggingFetch 基础测试', () => {
+  let mcpServer;
+
+  afterAll(() => {
+    // 清理缓存定时器
+    if (mcpServer && mcpServer.tools && mcpServer.tools.downloader) {
+      mcpServer.tools.downloader.cleanup();
+    }
+  });
   test('模块导入测试', () => {
     const { getConfig } = require('../src/core/config');
     const { createLogger } = require('../src/utils/logger');
@@ -24,12 +32,12 @@ describe('MCP HuggingFetch 基础测试', () => {
   
   test('MCP 服务器创建测试', () => {
     const { McpServer } = require('../src/mcp/server');
-    const server = new McpServer();
-    
-    expect(server).toBeDefined();
-    expect(server.getStatus).toBeDefined();
-    
-    const status = server.getStatus();
+    mcpServer = new McpServer();
+
+    expect(mcpServer).toBeDefined();
+    expect(mcpServer.getStatus).toBeDefined();
+
+    const status = mcpServer.getStatus();
     expect(status).toHaveProperty('initialized');
     expect(status).toHaveProperty('version');
   });

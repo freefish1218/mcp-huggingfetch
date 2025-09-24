@@ -45,6 +45,7 @@ Thumbs.db
 .idea/
 .claude/
 CLAUDE.md
+AGENTS.md
 *.swp
 *.swo
 *~

@@ -365,6 +365,26 @@ class SmartCache {
   }
 
   /**
+   * 停止定期清理
+   */
+  stopCleanup() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+  }
+
+  /**
+   * 销毁缓存实例（清理所有资源）
+   */
+  destroy() {
+    this.stopCleanup();
+    this.cache.clear();
+    this.etags.clear();
+    this.stats = { hits: 0, misses: 0, evictions: 0, memoryUsed: 0 };
+  }
+
+  /**
    * 清理过期条目
    */
   cleanup() {

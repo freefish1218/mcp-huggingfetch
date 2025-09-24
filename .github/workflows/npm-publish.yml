@@ -8,8 +8,6 @@ on:
       - 'package.json'
       - 'src/**'
       - '.github/workflows/npm-publish.yml'
-  release:
-    types: [created]
   workflow_dispatch:
     inputs:
       version:
